@@ -31,6 +31,23 @@ from split_pdf import YOLOQuestionSplitter
 from dotenv import load_dotenv
 load_dotenv()
 
+# ============================================================================
+# 🔥 LOCAL TESTING ONLY - DELETE THIS ENTIRE BLOCK BEFORE DEPLOYMENT 🔥
+# ============================================================================
+# For OAuth, use these variables instead of service account JSON
+"""
+os.environ["GOOGLE_CLIENT_ID"] = "your-client-id.apps.googleusercontent.com"
+os.environ["GOOGLE_CLIENT_SECRET"] = "GOCSPX-your-secret"
+os.environ["GOOGLE_REFRESH_TOKEN"] = "1//your-refresh-token"
+
+os.environ["POCKETBASE_EMAIL"] = "your-email@example.com"
+os.environ["POCKETBASE_PASSWORD"] = "your-password"
+os.environ["SAVE_TO_DRIVE"] = "true"
+"""
+# ============================================================================
+# 🔥 END LOCAL TESTING BLOCK - DELETE BEFORE DEPLOYMENT 🔥
+# ============================================================================
+
 # 1. Detect environment
 IS_RAILWAY = os.environ.get("RAILWAY_ENVIRONMENT_NAME") is not None
 
@@ -550,6 +567,47 @@ def get_info():
         "max_pages": "20 pages (testing phase)",
         "recommended_dpi": 300
     }
+
+
+@app.get("/sample")
+@app.get("/api/sample")
+async def get_sample_file():
+    """Serve the sample worksheet file"""
+    # Debug: Show what files we can see
+    print("\n" + "="*70)
+    print("🔍 Looking for sample file...")
+    print(f"Current working directory: {os.getcwd()}")
+    print(f"Files in current dir: {os.listdir('.')}")
+    
+    if os.path.exists('frontend'):
+        print(f"Files in frontend/: {os.listdir('frontend')}")
+    else:
+        print("❌ frontend/ directory not found")
+    
+    # Check multiple possible locations
+    possible_paths = [
+        Path("frontend/sample.png"),
+        Path("../frontend/sample.png"),
+        Path("./sample.png"),
+        Path("sample.png"),
+        Path("frontend/sample_worksheet.pdf"),
+        Path("../frontend/sample_worksheet.pdf"),
+        Path("./sample_worksheet.pdf"),
+    ]
+    
+    for sample_path in possible_paths:
+        print(f"Checking: {sample_path} -> Exists: {sample_path.exists()}")
+        if sample_path.exists():
+            print(f"✅ Serving sample from: {sample_path}")
+            print("="*70 + "\n")
+            return FileResponse(sample_path)
+    
+    print("❌ Sample file not found in any location")
+    print("="*70 + "\n")
+    raise HTTPException(
+        status_code=404,
+        detail="Sample file not found. Please upload your own file."
+    )
 
 
 @app.post("/api/feedback")

@@ -104,15 +104,15 @@ sampleBtn.addEventListener('click', async () => {
     sampleBtn.textContent = 'Loading sample...';
     
     try {
-        // Fetch the sample file from your server
-        const response = await fetch(`${API_BASE}/sample.png`);
+        // Use the existing frontend serving route
+        const response = await fetch(`${API_BASE}/frontend/sample.png`);
         
         if (!response.ok) {
             throw new Error('Sample file not found');
         }
         
         const blob = await response.blob();
-        const file = new File([blob], 'sample.png', { type: 'application/png' });
+        const file = new File([blob], 'sample.png', { type: 'image/png' });
         
         handleFile(file);
         isDemo = true;
@@ -457,7 +457,7 @@ splitBtn.addEventListener('click', async () => {
         const formData = new FormData();
         formData.append('file', selectedFile);
 
-        const url = `${API_BASE}/api/split?dpi=300&conf_threshold=0.05`;
+        const url = `${API_BASE}/api/split?dpi=200&conf_threshold=0.1`;
 
         console.log('Uploading to:', url);
         console.log('File:', selectedFile.name, selectedFile.size);
@@ -474,7 +474,9 @@ splitBtn.addEventListener('click', async () => {
         const response = await fetch(url, {
             method: 'POST',
             body: formData,
-            signal: controller.signal
+            signal: controller.signal,
+            // Don't buffer the response - start receiving immediately
+            cache: 'no-store'
         });
 
         clearTimeout(timeoutId);
