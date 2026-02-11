@@ -71,6 +71,7 @@ DRIVE_FOLDER_ID = "1LZgS5aNOwmEEYAbqIh3Vl285nTb8lt02"
 
 # Initialize on startup
 drive_service = None
+yolo_splitter = None  # Cache the YOLO model globally
 
 
 def get_drive_service():
@@ -163,7 +164,20 @@ def create_drive_folder(folder_name, parent_folder_id):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
-    global drive_service
+    global drive_service, yolo_splitter
+    
+    # Load YOLO model once at startup
+    if os.path.exists("best.pt"):
+        print("🔥 Loading YOLO model at startup...")
+        try:
+            yolo_splitter = YOLOQuestionSplitter(debug=False, model_path="best.pt")
+            print("✅ YOLO model loaded successfully")
+        except Exception as e:
+            print(f"❌ Failed to load YOLO model: {e}")
+            yolo_splitter = None
+    else:
+        print("⚠️ best.pt model file not found")
+        yolo_splitter = None
     
     # PocketBase Auth
     try:
@@ -332,10 +346,19 @@ async def split_worksheet(
         output_dir = os.path.join(temp_dir, 'output')
         os.makedirs(output_dir, exist_ok=True)
         
-        # Run YOLOv11 splitter
-        splitter = YOLOQuestionSplitter(debug=debug, model_path="best.pt")
+        # Use cached YOLO model (loaded at startup)
+        if yolo_splitter is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Model not loaded. Please try again in a moment."
+            )
+        
+        splitter = yolo_splitter
         
         try:
+            import time
+            start_time = time.time()
+            
             splitter.split_worksheet(
                 input_path=input_path,
                 output_dir=output_dir,
@@ -343,6 +366,9 @@ async def split_worksheet(
                 cleanup_temp=True,
                 conf_threshold=conf_threshold
             )
+            
+            processing_time = time.time() - start_time
+            print(f"⏱️ Processing completed in {processing_time:.2f} seconds")
         except SystemExit:
             raise HTTPException(
                 status_code=422,
