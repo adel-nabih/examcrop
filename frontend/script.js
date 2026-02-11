@@ -457,7 +457,7 @@ splitBtn.addEventListener('click', async () => {
         const formData = new FormData();
         formData.append('file', selectedFile);
 
-        const url = `${API_BASE}/api/split?dpi=200&conf_threshold=0.1`;
+        const url = `${API_BASE}/api/split?dpi=150&conf_threshold=0.10`;
 
         console.log('Uploading to:', url);
         console.log('File:', selectedFile.name, selectedFile.size);
