@@ -1,5 +1,6 @@
 # Ignore the massive local virtual environments
 backend/venv/
+backend/venv2/
 **/venv/
 **/.venv/
 
