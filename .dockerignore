@@ -2,6 +2,7 @@
 backend/venv/
 backend/venv2/
 **/venv/
+**/venv2/
 **/.venv/
 
 # Ignore local training runs and caches
