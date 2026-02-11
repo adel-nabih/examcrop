@@ -105,7 +105,7 @@ sampleBtn.addEventListener('click', async () => {
     
     try {
         // Use the existing frontend serving route
-        const response = await fetch(`${API_BASE}/frontend/sample.png`);
+        const response = await fetch(`${API_BASE}/api/sample`);
         
         if (!response.ok) {
             throw new Error('Sample file not found');
