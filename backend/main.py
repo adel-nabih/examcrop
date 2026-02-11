@@ -31,29 +31,36 @@ from split_pdf import YOLOQuestionSplitter
 from dotenv import load_dotenv
 load_dotenv()
 
+# 1. Detect environment
 IS_RAILWAY = os.environ.get("RAILWAY_ENVIRONMENT_NAME") is not None
 
+# 2. Set URL based on environment
 if IS_RAILWAY:
+    # Production: Fast internal link
     POCKETBASE_URL = "http://pocketbase.railway.internal:8080"
 else:
+    # Local: Public link for your MacBook
     POCKETBASE_URL = "https://pocketbase-production-4854.up.railway.app"
 
+# 3. Get Credentials from Environment
 POCKETBASE_EMAIL = os.environ.get("POCKETBASE_EMAIL")
 POCKETBASE_PASSWORD = os.environ.get("POCKETBASE_PASSWORD")
 
 pb = PocketBase(POCKETBASE_URL)
 
+# Google Drive Configuration
 SAVE_TO_DRIVE = os.environ.get("SAVE_TO_DRIVE", "true").lower() == "true"
 DRIVE_FOLDER_ID = "1LZgS5aNOwmEEYAbqIh3Vl285nTb8lt02"
 
 # Initialize on startup
 drive_service = None
-yolo_splitter = None
+yolo_splitter = None  # Cache the YOLO model globally
 
 
 def get_drive_service():
     """Initialize Google Drive API client using OAuth"""
     try:
+        # Get OAuth credentials from environment
         client_id = os.environ.get("GOOGLE_CLIENT_ID")
         client_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
         refresh_token = os.environ.get("GOOGLE_REFRESH_TOKEN")
@@ -67,6 +74,7 @@ def get_drive_service():
             print("   Run get_oauth_token.py locally to get these values")
             return None
         
+        # Create credentials from refresh token
         credentials = Credentials(
             token=None,
             refresh_token=refresh_token,
@@ -76,6 +84,7 @@ def get_drive_service():
             scopes=['https://www.googleapis.com/auth/drive.file']
         )
         
+        # Refresh to get access token
         credentials.refresh(Request())
         
         service = build('drive', 'v3', credentials=credentials)
@@ -141,16 +150,16 @@ async def lifespan(app: FastAPI):
     global drive_service, yolo_splitter
     
     # Load YOLO model once at startup
-    if os.path.exists("best.onnx"):
+    if os.path.exists("best.pt"):
         print("🔥 Loading YOLO model at startup...")
         try:
-            yolo_splitter = YOLOQuestionSplitter(debug=False, model_path="best.onnx")
+            yolo_splitter = YOLOQuestionSplitter(debug=False, model_path="best.pt")
             print("✅ YOLO model loaded successfully")
         except Exception as e:
             print(f"❌ Failed to load YOLO model: {e}")
             yolo_splitter = None
     else:
-        print("⚠️ best.onnx model file not found")
+        print("⚠️ best.pt model file not found")
         yolo_splitter = None
     
     # PocketBase Auth
@@ -203,7 +212,7 @@ app.add_middleware(
 
 @app.get("/api")
 def read_root():
-    model_status = "trained" if os.path.exists("best.onnx") else "not_trained"
+    model_status = "trained" if os.path.exists("best.pt") else "not_trained"
     
     return {
         "status": "ok",
@@ -236,7 +245,7 @@ async def split_worksheet(
     """
     
     # Check if model exists
-    if not os.path.exists("best.onnx"):
+    if not os.path.exists("best.pt"):
         raise HTTPException(
             status_code=503,
             detail="Service Unavailable"
@@ -545,7 +554,7 @@ async def split_worksheet(
 
 @app.get("/api/health")
 def health_check():
-    model_exists = os.path.exists("best.onnx")
+    model_exists = os.path.exists("best.pt")
     
     return {
         "status": "healthy" if model_exists else "model_missing",
