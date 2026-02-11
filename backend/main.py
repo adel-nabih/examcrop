@@ -167,16 +167,16 @@ async def lifespan(app: FastAPI):
     global drive_service, yolo_splitter
     
     # Load YOLO model once at startup
-    if os.path.exists("best.pt"):
+    if os.path.exists("best.onnx"):
         print("🔥 Loading YOLO model at startup...")
         try:
-            yolo_splitter = YOLOQuestionSplitter(debug=False, model_path="best.pt")
+            yolo_splitter = YOLOQuestionSplitter(debug=False, model_path="best.onnx")
             print("✅ YOLO model loaded successfully")
         except Exception as e:
             print(f"❌ Failed to load YOLO model: {e}")
             yolo_splitter = None
     else:
-        print("⚠️ best.pt model file not found")
+        print("⚠️ best.onnx model file not found")
         yolo_splitter = None
     
     # PocketBase Auth
@@ -229,7 +229,7 @@ app.add_middleware(
 
 @app.get("/api")
 def read_root():
-    model_status = "trained" if os.path.exists("best.pt") else "not_trained"
+    model_status = "trained" if os.path.exists("best.onnx") else "not_trained"
     
     return {
         "status": "ok",
@@ -262,7 +262,7 @@ async def split_worksheet(
     """
     
     # Check if model exists
-    if not os.path.exists("best.pt"):
+    if not os.path.exists("best.onnx"):
         raise HTTPException(
             status_code=503,
             detail="Service Unavailable"
@@ -571,7 +571,7 @@ async def split_worksheet(
 
 @app.get("/api/health")
 def health_check():
-    model_exists = os.path.exists("best.pt")
+    model_exists = os.path.exists("best.onnx")
     
     return {
         "status": "healthy" if model_exists else "model_missing",
