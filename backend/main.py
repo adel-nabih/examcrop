@@ -31,53 +31,29 @@ from split_pdf import YOLOQuestionSplitter
 from dotenv import load_dotenv
 load_dotenv()
 
-# ============================================================================
-# 🔥 LOCAL TESTING ONLY - DELETE THIS ENTIRE BLOCK BEFORE DEPLOYMENT 🔥
-# ============================================================================
-# For OAuth, use these variables instead of service account JSON
-"""
-os.environ["GOOGLE_CLIENT_ID"] = "your-client-id.apps.googleusercontent.com"
-os.environ["GOOGLE_CLIENT_SECRET"] = "GOCSPX-your-secret"
-os.environ["GOOGLE_REFRESH_TOKEN"] = "1//your-refresh-token"
-
-os.environ["POCKETBASE_EMAIL"] = "your-email@example.com"
-os.environ["POCKETBASE_PASSWORD"] = "your-password"
-os.environ["SAVE_TO_DRIVE"] = "true"
-"""
-# ============================================================================
-# 🔥 END LOCAL TESTING BLOCK - DELETE BEFORE DEPLOYMENT 🔥
-# ============================================================================
-
-# 1. Detect environment
 IS_RAILWAY = os.environ.get("RAILWAY_ENVIRONMENT_NAME") is not None
 
-# 2. Set URL based on environment
 if IS_RAILWAY:
-    # Production: Fast internal link
     POCKETBASE_URL = "http://pocketbase.railway.internal:8080"
 else:
-    # Local: Public link for your MacBook
     POCKETBASE_URL = "https://pocketbase-production-4854.up.railway.app"
 
-# 3. Get Credentials from Environment
 POCKETBASE_EMAIL = os.environ.get("POCKETBASE_EMAIL")
 POCKETBASE_PASSWORD = os.environ.get("POCKETBASE_PASSWORD")
 
 pb = PocketBase(POCKETBASE_URL)
 
-# Google Drive Configuration
 SAVE_TO_DRIVE = os.environ.get("SAVE_TO_DRIVE", "true").lower() == "true"
 DRIVE_FOLDER_ID = "1LZgS5aNOwmEEYAbqIh3Vl285nTb8lt02"
 
 # Initialize on startup
 drive_service = None
-yolo_splitter = None  # Cache the YOLO model globally
+yolo_splitter = None
 
 
 def get_drive_service():
     """Initialize Google Drive API client using OAuth"""
     try:
-        # Get OAuth credentials from environment
         client_id = os.environ.get("GOOGLE_CLIENT_ID")
         client_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
         refresh_token = os.environ.get("GOOGLE_REFRESH_TOKEN")
@@ -91,7 +67,6 @@ def get_drive_service():
             print("   Run get_oauth_token.py locally to get these values")
             return None
         
-        # Create credentials from refresh token
         credentials = Credentials(
             token=None,
             refresh_token=refresh_token,
@@ -101,7 +76,6 @@ def get_drive_service():
             scopes=['https://www.googleapis.com/auth/drive.file']
         )
         
-        # Refresh to get access token
         credentials.refresh(Request())
         
         service = build('drive', 'v3', credentials=credentials)
@@ -170,7 +144,7 @@ async def lifespan(app: FastAPI):
     if os.path.exists("best.onnx"):
         print("🔥 Loading YOLO model at startup...")
         try:
-            yolo_splitter = YOLOQuestionSplitter(debug=False, model_path="best.onnx", task="detect")
+            yolo_splitter = YOLOQuestionSplitter(debug=False, model_path="best.onnx")
             print("✅ YOLO model loaded successfully")
         except Exception as e:
             print(f"❌ Failed to load YOLO model: {e}")
