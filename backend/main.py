@@ -170,7 +170,7 @@ async def lifespan(app: FastAPI):
     if os.path.exists("best.onnx"):
         print("🔥 Loading YOLO model at startup...")
         try:
-            yolo_splitter = YOLOQuestionSplitter(debug=False, model_path="best.onnx")
+            yolo_splitter = YOLOQuestionSplitter(debug=False, model_path="best.onnx", task="detect")
             print("✅ YOLO model loaded successfully")
         except Exception as e:
             print(f"❌ Failed to load YOLO model: {e}")
