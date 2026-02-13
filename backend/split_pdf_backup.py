@@ -1,26 +1,21 @@
 #!/usr/bin/env python3
 """
-YOLOv11-Based Question Splitter - HEAVILY OPTIMIZED
-Key Improvements:
-1. Parallel processing of PDF pages
-2. Direct PDF cropping without unnecessary image conversions
-3. Batch YOLO inference
-4. Efficient memory management
-5. Reduced I/O operations
+YOLOv26-Based Question Splitter - OPTIMIZED FOR SPEED
+- Removed OCR (not needed)
+- Reduced logging
+- Optimized image processing
 """
 
 import os
 import sys
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import List, Dict
 import fitz
 from PIL import Image
 import cv2
 import numpy as np
 import pandas as pd
 import tempfile
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from functools import lru_cache
 
 try:
     from ultralytics import YOLO
@@ -31,7 +26,7 @@ except ImportError:
 
 
 class YOLOQuestionSplitter:
-    """YOLOv11-based worksheet question splitter - heavily optimized"""
+    """YOLOv26-based worksheet question splitter - optimized version"""
     
     def __init__(self, debug: bool = False, model_path: str = None):
         self.debug = debug
@@ -65,63 +60,56 @@ class YOLOQuestionSplitter:
         img.save(temp_pdf_path, "PDF", resolution=300.0, quality=95)
         return temp_pdf_path
     
-    def render_page_to_image(self, page: fitz.Page, zoom: float) -> np.ndarray:
-        """Render a single page to numpy array - optimized"""
-        mat = fitz.Matrix(zoom, zoom)
-        pix = page.get_pixmap(matrix=mat, alpha=False)
-        
-        img_data = pix.samples
-        img = np.frombuffer(img_data, dtype=np.uint8)
-        img = img.reshape(pix.height, pix.width, pix.n)
-        
-        if pix.n == 3:
-            img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-        elif pix.n == 4:
-            img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
-        
-        return img
-    
-    def pdf_to_images_parallel(self, pdf_path: str, dpi: int = 200) -> List[Dict]:
-        """Convert PDF pages to images in parallel - MAJOR SPEEDUP"""
+    def pdf_to_images(self, pdf_path: str, dpi: int = 200) -> List[Dict]:
+        """Convert PDF pages to OpenCV images - optimized"""
         doc = fitz.open(pdf_path)
-        page_count = len(doc)
-        zoom = dpi / 72
-        
-        def process_page(page_num: int) -> Dict:
-            page = doc[page_num]
-            img = self.render_page_to_image(page, zoom)
-            return {
-                'page_num': page_num,
-                'image': img,
-                'width': img.shape[1],
-                'height': img.shape[0]
-            }
-        
         page_data = []
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            futures = [executor.submit(process_page, i) for i in range(page_count)]
-            for future in as_completed(futures):
-                page_data.append(future.result())
+        
+        zoom = dpi / 72
+        mat = fitz.Matrix(zoom, zoom)
+        
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+            
+            # Render page to image
+            pix = page.get_pixmap(matrix=mat, alpha=False)
+            
+            # Convert to numpy array
+            img_data = pix.samples
+            img = np.frombuffer(img_data, dtype=np.uint8)
+            img = img.reshape(pix.height, pix.width, pix.n)
+            
+            # Convert color space
+            if pix.n == 3:
+                img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+            elif pix.n == 4:
+                img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
+            
+            page_data.append({
+                'image': img,
+                'width': pix.width,
+                'height': pix.height
+            })
         
         doc.close()
-        
-        page_data.sort(key=lambda x: x['page_num'])
         return page_data
     
-    def detect_questions_batch(self, images: List[np.ndarray], conf_threshold: float = 0.1) -> List[List[Dict]]:
-        """Batch YOLO inference for multiple images - MAJOR SPEEDUP"""
-        results = self.model(images, conf=conf_threshold, verbose=False)
+    def detect_questions_with_yolo(self, image: np.ndarray, conf_threshold: float = 0.1) -> List[Dict]:
+        """Use YOLO model to detect question blocks - optimized"""
+        # Run inference (verbose=False to reduce overhead)
+        results = self.model(image, conf=conf_threshold, verbose=False)
         
-        all_blocks = []
-        for result in results:
-            blocks = []
+        blocks = []
+        if len(results) > 0:
+            result = results[0]
+            
             if result.boxes is not None and len(result.boxes) > 0:
                 boxes = result.boxes.xyxy.cpu().numpy()
                 confidences = result.boxes.conf.cpu().numpy()
                 classes = result.boxes.cls.cpu().numpy()
                 
                 for box, conf, cls in zip(boxes, confidences, classes):
-                    if cls != 0:
+                    if cls != 0:  # class 0 is 'question'
                         continue
                     x1, y1, x2, y2 = box
                     
@@ -132,15 +120,15 @@ class YOLOQuestionSplitter:
                         'h': int(y2 - y1),
                         'confidence': float(conf)
                     })
-            all_blocks.append(blocks)
         
-        return all_blocks
+        return blocks
     
-    def apply_nms(self, blocks: List[Dict], iou_threshold: float = 0.5) -> List[Dict]:
-        """Non-Maximum Suppression to remove duplicates"""
+    def assign_question_numbers(self, blocks: List[Dict], page_offset: int = 0) -> pd.DataFrame:
+        """Assign question numbers by position - optimized (no OCR)"""
         if len(blocks) == 0:
-            return []
+            return pd.DataFrame()
         
+        # Remove duplicates using NMS
         def calc_iou(box1, box2):
             x1 = max(box1['x'], box2['x'])
             y1 = max(box1['y'], box2['y'])
@@ -157,33 +145,27 @@ class YOLOQuestionSplitter:
             
             return intersection / union if union > 0 else 0
         
+        # NMS: keep highest confidence boxes
         unique_blocks = []
         sorted_by_conf = sorted(blocks, key=lambda b: b['confidence'], reverse=True)
         
         for block in sorted_by_conf:
             is_duplicate = False
             for unique in unique_blocks:
-                if calc_iou(block, unique) > iou_threshold:
+                if calc_iou(block, unique) > 0.5:
                     is_duplicate = True
                     break
             if not is_duplicate:
                 unique_blocks.append(block)
         
-        return unique_blocks
-    
-    def assign_question_numbers(self, blocks: List[Dict], page_offset: int = 0) -> pd.DataFrame:
-        """Assign question numbers by position"""
-        if len(blocks) == 0:
-            return pd.DataFrame()
-        
-        unique_blocks = self.apply_nms(blocks)
-        
+        # Sort by position: top to bottom, left to right
         def sort_key(b):
             row = round(b['y'] / 50)
             return (row, b['x'])
         
         sorted_blocks = sorted(unique_blocks, key=sort_key)
         
+        # Assign sequential numbers
         questions = []
         for i, block in enumerate(sorted_blocks):
             questions.append({
@@ -197,10 +179,11 @@ class YOLOQuestionSplitter:
         
         return pd.DataFrame(questions)
     
-    def crop_questions_from_pdf(self, pdf_doc: fitz.Document, questions_df: pd.DataFrame, 
-                               page_num: int, dpi: int, output_dir: str):
-        """Crop questions directly from PDF without intermediate conversions - MAJOR SPEEDUP"""
-        page = pdf_doc[page_num]
+    def crop_from_pdf(self, pdf_path: str, df: pd.DataFrame, page_num: int, 
+                     dpi: int, output_dir: str):
+        """Crop questions from PDF - optimized"""
+        doc = fitz.open(pdf_path)
+        page = doc[page_num]
         
         if page.rotation != 0:
             page.set_rotation(0)
@@ -211,27 +194,32 @@ class YOLOQuestionSplitter:
         original_rect = page.rect
         margin = 5
         
-        for _, row in questions_df.iterrows():
+        for _, row in df.iterrows():
             q_num = int(row['question_num'])
             
+            # Convert pixel coordinates to PDF points
             x_pts = max(0, row['x'] * scale - margin)
             y_pts = max(0, row['y'] * scale - margin)
             w_pts = row['w'] * scale + 2 * margin
             h_pts = row['h'] * scale + 2 * margin
             
+            # Bounds check
             x2_pts = min(original_rect.width, x_pts + w_pts)
             y2_pts = min(original_rect.height, y_pts + h_pts)
             
             rect = fitz.Rect(x_pts, y_pts, x2_pts, y2_pts)
             
+            # Create cropped PDF
             out_pdf = fitz.open()
             out_page = out_pdf.new_page(width=rect.width, height=rect.height)
-            out_page.show_pdf_page(out_page.rect, pdf_doc, page_num, clip=rect)
+            out_page.show_pdf_page(out_page.rect, doc, page_num, clip=rect)
             out_page.set_rotation(0)
             
             filepath = Path(output_dir) / f"question_{q_num:02d}.pdf"
             out_pdf.save(filepath, garbage=4, deflate=True, clean=True, pretty=False)
             out_pdf.close()
+        
+        doc.close()
     
     def visualize(self, image: np.ndarray, df: pd.DataFrame, output_path: str):
         """Save visualization of detected questions"""
@@ -252,13 +240,7 @@ class YOLOQuestionSplitter:
                        dpi: int = 200, cleanup_temp: bool = True,
                        conf_threshold: float = 0.1):
         """
-        Main pipeline - HEAVILY OPTIMIZED
-        
-        Key optimizations:
-        1. Parallel page rendering
-        2. Batch YOLO inference
-        3. Direct PDF cropping (no intermediate image files)
-        4. Reduced I/O operations
+        Main pipeline - OPTIMIZED FOR SPEED
         """
         temp_pdf = None
         pdf_path = self.convert_to_pdf(input_path)
@@ -266,21 +248,23 @@ class YOLOQuestionSplitter:
             temp_pdf = pdf_path
         
         try:
-            page_data_list = self.pdf_to_images_parallel(pdf_path, dpi)
-            
-            images = [page_data['image'] for page_data in page_data_list]
-            all_blocks = self.detect_questions_batch(images, conf_threshold)
+            # Convert pages to images
+            page_data_list = self.pdf_to_images(pdf_path, dpi)
             
             all_questions_found = False
             total_questions = 0
             question_offset = 0
             
-            pdf_doc = fitz.open(pdf_path)
-            
-            for page_num, (page_data, blocks) in enumerate(zip(page_data_list, all_blocks)):
+            for page_num, page_data in enumerate(page_data_list):
+                image = page_data['image']
+                
+                # Detect questions
+                blocks = self.detect_questions_with_yolo(image, conf_threshold)
+                
                 if not blocks:
                     continue
                 
+                # Assign numbers
                 df = self.assign_question_numbers(blocks, question_offset)
                 
                 if len(df) == 0:
@@ -290,13 +274,13 @@ class YOLOQuestionSplitter:
                 total_questions += len(df)
                 question_offset = df['question_num'].max()
                 
+                # Save visualization if debug
                 if self.debug:
                     debug_path = f"debug_yolo_page_{page_num+1}.png"
-                    self.visualize(page_data['image'], df, debug_path)
+                    self.visualize(image, df, debug_path)
                 
-                self.crop_questions_from_pdf(pdf_doc, df, page_num, dpi, output_dir)
-            
-            pdf_doc.close()
+                # Crop and save
+                self.crop_from_pdf(pdf_path, df, page_num, dpi, output_dir)
             
             if not all_questions_found:
                 sys.exit(1)
@@ -308,7 +292,7 @@ class YOLOQuestionSplitter:
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: python split_pdf_optimized.py <input> <output_dir> [--debug] [--model path] [--conf 0.1] [--dpi 200]")
+        print("Usage: python split_pdf.py <input> <output_dir> [--debug] [--model path] [--conf 0.1] [--dpi 200]")
         sys.exit(1)
     
     input_path = sys.argv[1]
