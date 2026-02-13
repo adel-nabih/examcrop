@@ -308,7 +308,7 @@ class YOLOQuestionSplitter:
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: python split_pdf_optimized.py <input> <output_dir> [--debug] [--model path] [--conf 0.1] [--dpi 200]")
+        print("Usage: python split_pdf <input> <output_dir> [--debug] [--model path] [--conf 0.1] [--dpi 200]")
         sys.exit(1)
     
     input_path = sys.argv[1]

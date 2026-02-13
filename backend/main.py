@@ -30,7 +30,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 import json
 
-from split_pdf_optimized import YOLOQuestionSplitter
+from split_pdf import YOLOQuestionSplitter
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -239,7 +239,7 @@ async def split_worksheet(
     file: UploadFile = File(...),
     dpi: int = 150,
     debug: bool = False,
-    conf_threshold: float = 0.10
+    conf_threshold: float = 0.1
 ):
     """
     Split worksheets using custom-trained YOLOv11 model - OPTIMIZED VERSION
