@@ -237,9 +237,9 @@ def read_root():
 @app.post("/api/split")
 async def split_worksheet(
     file: UploadFile = File(...),
-    dpi: int = 150,
+    dpi: int = 250,
     debug: bool = False,
-    conf_threshold: float = 0.1
+    conf_threshold: float = 0.05
 ):
     """
     Split worksheets using custom-trained YOLOv11 model - OPTIMIZED VERSION

@@ -110,7 +110,7 @@ class YOLOQuestionSplitter:
     
     def detect_questions_batch(self, images: List[np.ndarray], conf_threshold: float = 0.1) -> List[List[Dict]]:
         """Batch YOLO inference for multiple images - MAJOR SPEEDUP"""
-        results = self.model(images, conf=conf_threshold, verbose=False)
+        results = self.model(images, conf=conf_threshold, imgsz=800, verbose=False)
         
         all_blocks = []
         for result in results:
