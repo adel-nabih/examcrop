@@ -2,17 +2,14 @@
 const API_BASE = (() => {
     const hostname = window.location.hostname;
     
-    // Local development
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
         return 'http://localhost:8000';
     }
     
-    // Production on examcrop.com
     if (hostname === 'examcrop.com' || hostname === 'www.examcrop.com') {
         return 'https://pdf-splitter-production-9d84.up.railway.app';
     }
     
-    // Fallback to current origin
     return '';
 })();
 
@@ -26,6 +23,9 @@ const fileName = document.getElementById('fileName');
 const fileSize = document.getElementById('fileSize');
 const splitBtn = document.getElementById('splitBtn');
 const sampleBtn = document.getElementById('sampleBtn');
+const previewButtons = document.getElementById('previewButtons');
+const previewOriginalBtn = document.getElementById('previewOriginalBtn');
+const previewResultsBtn = document.getElementById('previewResultsBtn');
 const progressContainer = document.getElementById('progressContainer');
 const progressBar = document.getElementById('progressBar');
 const progressText = document.getElementById('progressText');
@@ -33,7 +33,6 @@ const loading = document.getElementById('loading');
 const errorMsg = document.getElementById('errorMsg');
 const successMsg = document.getElementById('successMsg');
 
-// Email Modal Elements
 const modalOverlay = document.getElementById('modalOverlay');
 const modalClose = document.getElementById('modalClose');
 const emailForm = document.getElementById('emailForm');
@@ -41,7 +40,6 @@ const emailInput = document.getElementById('emailInput');
 const commentInput = document.getElementById('commentInput');
 const marketingOptIn = document.getElementById('marketingOptIn');
 
-// Viewer Modal Elements
 const viewerOverlay = document.getElementById('viewerOverlay');
 const viewerClose = document.getElementById('viewerClose');
 const viewerImage = document.getElementById('viewerImage');
@@ -54,12 +52,14 @@ const downloadAll = document.getElementById('downloadAll');
 
 // State
 let selectedFile = null;
+let originalFilePages = [];
 let pendingDownload = null;
 let processedQuestions = [];
 let currentQuestionIndex = 0;
+let currentViewMode = 'results';
 let isDemo = false;
 
-// Smooth scroll for anchor links
+// Smooth scroll
 document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     anchor.addEventListener('click', function (e) {
         e.preventDefault();
@@ -98,13 +98,12 @@ uploadArea.addEventListener('drop', (e) => {
     }
 });
 
-// NEW: Sample Worksheet Button
+// Sample Button
 sampleBtn.addEventListener('click', async () => {
     sampleBtn.disabled = true;
     sampleBtn.textContent = 'Loading sample...';
     
     try {
-        // Use the existing frontend serving route
         const response = await fetch(`${API_BASE}/api/sample`);
         
         if (!response.ok) {
@@ -117,7 +116,6 @@ sampleBtn.addEventListener('click', async () => {
         handleFile(file);
         isDemo = true;
         
-        // Auto-trigger split for demo
         setTimeout(() => {
             if (splitBtn && !splitBtn.disabled) {
                 splitBtn.click();
@@ -133,7 +131,7 @@ sampleBtn.addEventListener('click', async () => {
     }
 });
 
-function handleFile(file) {
+async function handleFile(file) {
     selectedFile = file;
     
     fileName.textContent = file.name;
@@ -143,6 +141,71 @@ function handleFile(file) {
     splitBtn.classList.add('show');
     
     hideMessages();
+    
+    await loadOriginalFilePages(file);
+}
+
+async function loadOriginalFilePages(file) {
+    try {
+        originalFilePages = [];
+        
+        if (file.type === 'application/pdf') {
+            const arrayBuffer = await file.arrayBuffer();
+            
+            if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            }
+            
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            const pageCount = pdf.numPages;
+            
+            console.log(`Loading ${pageCount} pages from original PDF`);
+            
+            for (let i = 1; i <= pageCount; i++) {
+                const page = await pdf.getPage(i);
+                const scale = 2.0;
+                const viewport = page.getViewport({ scale: scale });
+                
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                
+                await page.render({
+                    canvasContext: context,
+                    viewport: viewport
+                }).promise;
+                
+                originalFilePages.push({
+                    pageNumber: i,
+                    imageUrl: canvas.toDataURL('image/png')
+                });
+            }
+            
+            console.log(`Loaded ${originalFilePages.length} pages`);
+            
+        } else if (file.type.startsWith('image/')) {
+            const imageUrl = await readFileAsDataURL(file);
+            originalFilePages.push({
+                pageNumber: 1,
+                imageUrl: imageUrl
+            });
+            
+            console.log('Loaded single image file');
+        }
+        
+    } catch (error) {
+        console.error('Error loading original file:', error);
+    }
+}
+
+function readFileAsDataURL(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
 }
 
 function formatFileSize(bytes) {
@@ -184,45 +247,79 @@ function hideEmailModal() {
     marketingOptIn.checked = false;
 }
 
-function showViewer() {
+function showViewer(mode = 'results') {
+    currentViewMode = mode;
     viewerOverlay.classList.add('show');
-    updateViewerUI();
+    
+    if (mode === 'original') {
+        viewerTitle.textContent = 'Original File Preview';
+        currentQuestionIndex = 0;
+        updateOriginalViewerUI();
+    } else {
+        viewerTitle.textContent = 'Questions Preview';
+        currentQuestionIndex = 0;
+        updateResultsViewerUI();
+    }
 }
 
 function hideViewer() {
     viewerOverlay.classList.remove('show');
 }
 
-function updateViewerUI() {
+function updateOriginalViewerUI() {
+    if (originalFilePages.length === 0) return;
+    
+    const current = originalFilePages[currentQuestionIndex];
+    
+    viewerImage.src = current.imageUrl;
+    
+    if (originalFilePages.length > 1) {
+        viewerCounter.textContent = `Page ${current.pageNumber} of ${originalFilePages.length}`;
+    } else {
+        viewerCounter.textContent = 'Single page';
+    }
+    
+    viewerPrev.disabled = currentQuestionIndex === 0;
+    viewerNext.disabled = currentQuestionIndex === originalFilePages.length - 1;
+    
+    downloadCurrent.style.display = 'none';
+    downloadAll.textContent = 'Download Original';
+}
+
+function updateResultsViewerUI() {
     if (processedQuestions.length === 0) return;
     
     const current = processedQuestions[currentQuestionIndex];
     
-    // Update image
     viewerImage.src = current.imageUrl;
     
-    // Update counter
     viewerCounter.textContent = `Question ${currentQuestionIndex + 1} of ${processedQuestions.length}`;
     
-    // Update navigation buttons
     viewerPrev.disabled = currentQuestionIndex === 0;
     viewerNext.disabled = currentQuestionIndex === processedQuestions.length - 1;
+    
+    downloadCurrent.style.display = 'inline-block';
+    downloadAll.textContent = 'Download All (ZIP)';
 }
 
 function navigateQuestion(direction) {
     const newIndex = currentQuestionIndex + direction;
+    const maxIndex = currentViewMode === 'original' ? originalFilePages.length - 1 : processedQuestions.length - 1;
     
-    if (newIndex >= 0 && newIndex < processedQuestions.length) {
+    if (newIndex >= 0 && newIndex <= maxIndex) {
         currentQuestionIndex = newIndex;
-        updateViewerUI();
+        
+        if (currentViewMode === 'original') {
+            updateOriginalViewerUI();
+        } else {
+            updateResultsViewerUI();
+        }
     }
 }
 
 async function extractQuestionsFromZip(blob) {
     try {
-        // First, we need to load JSZip
         if (typeof JSZip === 'undefined') {
-            // Load JSZip from CDN
             await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
         }
         
@@ -232,19 +329,16 @@ async function extractQuestionsFromZip(blob) {
         const questions = [];
         const pdfFiles = [];
         
-        // Find all PDF files (excluding combined)
         zipContent.forEach((relativePath, zipEntry) => {
             if (relativePath.endsWith('.pdf') && !relativePath.includes('combined')) {
                 pdfFiles.push({ name: relativePath, entry: zipEntry });
             }
         });
         
-        // Sort by filename
         pdfFiles.sort((a, b) => a.name.localeCompare(b.name));
         
         console.log(`Found ${pdfFiles.length} question PDFs in ZIP`);
         
-        // Extract each PDF and convert to image
         for (const pdfFile of pdfFiles) {
             const pdfBlob = await pdfFile.entry.async('blob');
             const imageUrl = await convertPdfToImage(pdfBlob);
@@ -261,7 +355,6 @@ async function extractQuestionsFromZip(blob) {
     } catch (error) {
         console.error('Error extracting questions:', error);
         
-        // Fallback: create placeholders
         const questionCount = pendingDownload.questionCount || 3;
         const questions = [];
         
@@ -279,35 +372,28 @@ async function extractQuestionsFromZip(blob) {
 
 async function convertPdfToImage(pdfBlob) {
     try {
-        // Initialize PDF.js worker
         if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         }
         
-        // Load the PDF
         const arrayBuffer = await pdfBlob.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         
-        // Get the first page
         const page = await pdf.getPage(1);
         
-        // Set scale for good quality
         const scale = 2.0;
         const viewport = page.getViewport({ scale: scale });
         
-        // Create canvas
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         canvas.height = viewport.height;
         canvas.width = viewport.width;
         
-        // Render PDF page to canvas
         await page.render({
             canvasContext: context,
             viewport: viewport
         }).promise;
         
-        // Convert canvas to data URL
         return canvas.toDataURL('image/png');
         
     } catch (error) {
@@ -384,9 +470,8 @@ async function submitEmail(email, comment, marketingOptIn) {
 // Modal Event Listeners
 modalClose.addEventListener('click', () => {
     hideEmailModal();
-    // Show viewer after closing modal
     if (pendingDownload && processedQuestions.length > 0) {
-        showViewer();
+        showViewer('results');
     }
 });
 
@@ -401,9 +486,21 @@ emailForm.addEventListener('submit', async (e) => {
     
     hideEmailModal();
     
-    // Show viewer after email submission
     if (pendingDownload && processedQuestions.length > 0) {
-        showViewer();
+        showViewer('results');
+    }
+});
+
+// Preview Button Listeners
+previewOriginalBtn.addEventListener('click', () => {
+    if (originalFilePages.length > 0) {
+        showViewer('original');
+    }
+});
+
+previewResultsBtn.addEventListener('click', () => {
+    if (processedQuestions.length > 0) {
+        showViewer('results');
     }
 });
 
@@ -413,7 +510,6 @@ viewerClose.addEventListener('click', hideViewer);
 viewerPrev.addEventListener('click', () => navigateQuestion(-1));
 viewerNext.addEventListener('click', () => navigateQuestion(1));
 
-// Keyboard navigation in viewer
 document.addEventListener('keydown', (e) => {
     if (!viewerOverlay.classList.contains('show')) return;
     
@@ -429,16 +525,16 @@ document.addEventListener('keydown', (e) => {
 downloadCurrent.addEventListener('click', async () => {
     if (pendingDownload && processedQuestions.length > 0) {
         const currentQuestion = processedQuestions[currentQuestionIndex];
-        
-        // Download the individual PDF
         triggerDownload(currentQuestion.blob, currentQuestion.name);
         showSuccess(`Downloading ${currentQuestion.name}...`);
     }
 });
 
 downloadAll.addEventListener('click', () => {
-    if (pendingDownload) {
-        // Download the full ZIP file
+    if (currentViewMode === 'original' && selectedFile) {
+        triggerDownload(selectedFile, selectedFile.name);
+        showSuccess(`Downloading original file...`);
+    } else if (pendingDownload) {
         triggerDownload(pendingDownload.blob, pendingDownload.filename);
         showSuccess(`Downloading all ${processedQuestions.length} questions...`);
     }
@@ -457,25 +553,22 @@ splitBtn.addEventListener('click', async () => {
         const formData = new FormData();
         formData.append('file', selectedFile);
 
-        const url = `${API_BASE}/api/split?dpi=150&conf_threshold=0.10`;
+        const url = `${API_BASE}/api/split?dpi=200&conf_threshold=0.10`;
 
         console.log('Uploading to:', url);
         console.log('File:', selectedFile.name, selectedFile.size);
 
-        // Simulate upload progress
         updateProgress(10, 'Uploading... 10%');
         
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 180000);
 
-        // Start upload
         updateProgress(30, 'Uploading... 30%');
         
         const response = await fetch(url, {
             method: 'POST',
             body: formData,
             signal: controller.signal,
-            // Don't buffer the response - start receiving immediately
             cache: 'no-store'
         });
 
@@ -540,24 +633,20 @@ splitBtn.addEventListener('click', async () => {
             questionCount: parseInt(questionCount) || 0
         };
 
-        // Show loading message
         updateProgress(100, 'Preparing preview...');
 
-        // Extract questions for viewer
         processedQuestions = await extractQuestionsFromZip(blob);
         currentQuestionIndex = 0;
 
         console.log(`Extracted ${processedQuestions.length} questions for preview`);
 
-        // Hide progress, show success
         setTimeout(() => {
             progressContainer.classList.remove('show');
+            previewButtons.classList.add('show');
             
             if (isDemo) {
-                // For demo, show viewer directly
-                showViewer();
+                showViewer('results');
             } else {
-                // For real files, show email modal first
                 showEmailModal();
             }
         }, 500);
@@ -573,7 +662,7 @@ splitBtn.addEventListener('click', async () => {
     }
 });
 
-// Check backend on load
+// Health check on load
 window.addEventListener('DOMContentLoaded', async () => {
     try {
         const response = await fetch(`${API_BASE}/api/health`);

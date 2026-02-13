@@ -1,6 +1,6 @@
 """
 FastAPI Backend for Worksheet Splitter - OPTIMIZED
-YOLOv11 Custom Model with Parallel Processing & Caching
+YOLOv26 Custom Model with Parallel Processing & Caching
 """
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
@@ -194,8 +194,8 @@ async def lifespan(app: FastAPI):
         process_pool.shutdown(wait=False)
 
 app = FastAPI(
-    title="Worksheet Splitter - YOLOv11 Custom",
-    description="AI-powered question splitting using custom-trained YOLOv11",
+    title="Worksheet Splitter - YOLOv26 Custom",
+    description="AI-powered question splitting using custom-trained YOLOv26",
     version="11.1.0",
     lifespan=lifespan
 )
@@ -226,9 +226,9 @@ def read_root():
     
     return {
         "status": "ok",
-        "service": "yolov11-question-splitter",
+        "service": "yolov26-question-splitter",
         "version": "11.1.0",
-        "model": "YOLOv11 Custom Trained - Optimized",
+        "model": "YOLOv26 Custom Trained - Optimized",
         "model_status": model_status,
     }
 
@@ -239,10 +239,10 @@ async def split_worksheet(
     file: UploadFile = File(...),
     dpi: int = 250,
     debug: bool = False,
-    conf_threshold: float = 0.05
+    conf_threshold: float = 0.10
 ):
     """
-    Split worksheets using custom-trained YOLOv11 model - OPTIMIZED VERSION
+    Split worksheets using custom-trained YOLOv26 model - OPTIMIZED VERSION
     
     Args:
         file: PDF, JPG, JPEG, or PNG
@@ -468,7 +468,7 @@ async def split_worksheet(
             headers={
                 "Content-Disposition": f"attachment; filename={zip_filename}",
                 "X-Questions-Count": str(len(output_files)),
-                "X-Method": "YOLOv11-Custom-Optimized",
+                "X-Method": "YOLOv26-Custom-Optimized",
             }
         )
     
@@ -560,7 +560,7 @@ def health_check():
     
     return {
         "status": "healthy" if model_exists else "model_missing",
-        "method": "YOLOv11 Custom Trained - Optimized",
+        "method": "YOLOv26 Custom Trained - Optimized",
         "model_ready": yolo_splitter is not None,
         "drive_enabled": SAVE_TO_DRIVE,
         "drive_ready": drive_service is not None
@@ -570,9 +570,9 @@ def health_check():
 @app.get("/api/info")
 def get_info():
     return {
-        "service": "YOLOv11 Question Splitter",
+        "service": "YOLOv26 Question Splitter",
         "version": "11.1.0",
-        "description": "Custom-trained YOLOv11 for worksheet question detection - Optimized",
+        "description": "Custom-trained YOLOv26 for worksheet question detection - Optimized",
         "supported_formats": ["PDF", "JPG", "JPEG", "PNG"],
         "max_file_size": "20MB",
         "max_pages": "20 pages",

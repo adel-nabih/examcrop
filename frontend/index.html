@@ -4,27 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <!-- Primary Meta Tags -->
-    <title>Exam Crop - Split Exam Papers & Worksheets into Individual Questions | Free Tool for Teachers</title>
+    <title>Exam Crop</title>
     <meta name="title" content="Exam Crop - Split Exam Papers & Worksheets into Individual Questions">
     <meta name="description" content="Automatically split exam papers and worksheets into individual question PDFs in seconds. Free AI-powered tool for teachers. Supports IGCSE, IB, SAT, Thanaweya Amma, and more.">
     <meta name="keywords" content="exam splitter, worksheet splitter, PDF question separator, split exam questions, teacher tools, IGCSE exam prep, IB worksheet tool, SAT question extractor, exam crop">
     
-    <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://examcrop.com/">
     <meta property="og:title" content="Exam Crop - Split Exam Papers into Individual Questions">
     <meta property="og:description" content="Automatically split exam papers and worksheets into individual question PDFs in seconds. Free AI-powered tool for teachers.">
     <meta property="og:image" content="https://examcrop.com/og-image.png">
     
-    <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image">
     <meta property="twitter:url" content="https://examcrop.com/">
     <meta property="twitter:title" content="Exam Crop - Split Exam Papers into Individual Questions">
     <meta property="twitter:description" content="Automatically split exam papers and worksheets into individual question PDFs in seconds. Free AI-powered tool for teachers.">
     <meta property="twitter:image" content="https://examcrop.com/twitter-image.png">
     
-    <!-- Additional SEO -->
     <link rel="canonical" href="https://examcrop.com/">
     <meta name="robots" content="index, follow">
     <meta name="language" content="English">
@@ -35,10 +31,8 @@
     <link rel="icon" type="image/png" sizes="16x16" href="favicon/favicon-16x16.png">
     <link rel="manifest" href="favicon/site.webmanifest">
     
-    <!-- PDF.js for rendering PDFs -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
-    <!-- Schema.org Structured Data -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -69,7 +63,6 @@
             line-height: 1.6;
         }
 
-        /* Header/Nav */
         .header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             padding: 20px 0;
@@ -112,7 +105,6 @@
             color: white;
         }
 
-        /* Hero Section */
         .hero {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             padding: 80px 30px 100px;
@@ -178,7 +170,6 @@
             background: rgba(255, 255, 255, 0.1);
         }
 
-        /* Upload Section - The functional part */
         .upload-section {
             background: #f8f9ff;
             padding: 60px 30px;
@@ -253,7 +244,6 @@
             display: none;
         }
 
-        /* NEW: Sample Button */
         .sample-btn {
             width: 100%;
             padding: 16px;
@@ -333,7 +323,54 @@
             cursor: not-allowed;
         }
 
-        /* NEW: Progress Bar */
+        .preview-buttons {
+            display: none;
+            gap: 15px;
+            margin-top: 25px;
+        }
+
+        .preview-buttons.show {
+            display: flex;
+        }
+
+        .preview-btn {
+            flex: 1;
+            padding: 16px;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .preview-btn-original {
+            background: #f8f9ff;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+
+        .preview-btn-original:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .preview-btn-results {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .preview-btn-results:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
+        }
+
         .progress-container {
             display: none;
             margin-top: 25px;
@@ -422,7 +459,6 @@
             color: #2a7a2a;
         }
 
-        /* How It Works */
         .how-it-works {
             padding: 80px 30px;
             background: white;
@@ -485,7 +521,6 @@
             line-height: 1.6;
         }
 
-        /* Features */
         .features {
             padding: 80px 30px;
             background: #f8f9ff;
@@ -529,7 +564,6 @@
             line-height: 1.6;
         }
 
-        /* Supported Formats */
         .formats {
             padding: 80px 30px;
             background: white;
@@ -554,7 +588,6 @@
             border: 2px solid #667eea30;
         }
 
-        /* FAQ Section */
         .faq-section {
             padding: 80px 30px;
             background: #f8f9ff;
@@ -586,7 +619,6 @@
             line-height: 1.6;
         }
 
-        /* CTA Section */
         .cta-section {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             padding: 80px 30px;
@@ -606,7 +638,6 @@
             opacity: 0.95;
         }
 
-        /* Footer */
         .footer {
             background: #2d3748;
             color: white;
@@ -648,7 +679,6 @@
             font-size: 14px;
         }
 
-        /* Email Collection Modal */
         .modal-overlay {
             display: none;
             position: fixed;
@@ -782,7 +812,6 @@
             cursor: not-allowed;
         }
 
-        /* NEW: Results Viewer Modal */
         .viewer-overlay {
             display: none;
             position: fixed;
@@ -944,7 +973,6 @@
             background: #e0e0e0;
         }
 
-        /* Responsive */
         @media (max-width: 768px) {
             .hero h1 {
                 font-size: 36px;
@@ -977,15 +1005,18 @@
                 height: 40px;
                 font-size: 20px;
             }
+
+            .preview-buttons {
+                flex-direction: column;
+            }
         }
     </style>
 </head>
 <body>
-    <!-- Header -->
     <header class="header">
         <div class="nav-container">
             <a href="#" class="logo">
-                <span>Exam Crop</span>
+                <span>📄 Exam Crop</span>
             </a>
             <nav class="nav-links">
                 <a href="#how-it-works">How It Works</a>
@@ -995,7 +1026,6 @@
         </div>
     </header>
 
-    <!-- Hero Section -->
     <section class="hero">
         <div class="hero-content">
             <h1>Split Exam Papers in Seconds</h1>
@@ -1007,7 +1037,6 @@
         </div>
     </section>
 
-    <!-- Upload Section (Functional Part) -->
     <section class="upload-section" id="upload">
         <div class="upload-container">
             <h2 class="upload-title">Upload Your Worksheet</h2>
@@ -1020,7 +1049,6 @@
                 <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png">
             </div>
 
-            <!-- NEW: Sample Button -->
             <button class="sample-btn" id="sampleBtn">
                 ✨ See how it works with a sample worksheet
             </button>
@@ -1032,7 +1060,15 @@
 
             <button class="split-btn" id="splitBtn">Split into Questions</button>
 
-            <!-- NEW: Progress Bar -->
+            <div class="preview-buttons" id="previewButtons">
+                <button class="preview-btn preview-btn-original" id="previewOriginalBtn">
+                    📄 Preview Original
+                </button>
+                <button class="preview-btn preview-btn-results" id="previewResultsBtn">
+                    ✨ View Questions
+                </button>
+            </div>
+
             <div class="progress-container" id="progressContainer">
                 <div class="progress-bar-wrapper">
                     <div class="progress-bar" id="progressBar"></div>
@@ -1050,7 +1086,6 @@
         </div>
     </section>
 
-    <!-- How It Works -->
     <section class="how-it-works" id="how-it-works">
         <h2 class="section-title">How It Works</h2>
         <p class="section-subtitle">Three simple steps to save hours of manual work</p>
@@ -1074,7 +1109,6 @@
         </div>
     </section>
 
-    <!-- Features -->
     <section class="features" id="features">
         <h2 class="section-title">Built for Teachers</h2>
         <p class="section-subtitle">Everything you need to prepare assignments faster</p>
@@ -1113,7 +1147,6 @@
         </div>
     </section>
 
-    <!-- Supported Formats -->
     <section class="formats">
         <h2 class="section-title">Works With Your Curriculum</h2>
         <p class="section-subtitle">Trained on multiple exam formats for accurate detection</p>
@@ -1128,7 +1161,6 @@
         </div>
     </section>
 
-    <!-- FAQ Section for SEO -->
     <section class="faq-section">
         <h2 class="section-title">Frequently Asked Questions</h2>
         <div class="faq-container">
@@ -1164,14 +1196,12 @@
         </div>
     </section>
 
-    <!-- CTA Section -->
     <section class="cta-section">
         <h2>Ready to Save Time?</h2>
         <p>Join teachers who are already using Exam Crop to prepare faster</p>
         <a href="#upload" class="btn-primary">Split Your First Worksheet</a>
     </section>
 
-    <!-- Footer -->
     <footer class="footer">
         <div class="footer-content">
             <div class="footer-section">
@@ -1195,7 +1225,6 @@
         </div>
     </footer>
 
-    <!-- Email Collection Modal -->
     <div class="modal-overlay" id="modalOverlay">
         <div class="modal">
             <button class="modal-close" id="modalClose">×</button>
@@ -1228,7 +1257,6 @@
         </div>
     </div>
 
-    <!-- NEW: Results Viewer Modal -->
     <div class="viewer-overlay" id="viewerOverlay">
         <div class="viewer-container">
             <div class="viewer-header">
