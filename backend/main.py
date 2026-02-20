@@ -62,8 +62,7 @@ thread_pool   = None
 process_pool  = None
 
 limiter = Limiter(key_func=get_remote_address)
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 
 def get_r2_client():
     """Initialize boto3 S3-compatible client for Cloudflare R2"""
@@ -179,6 +178,8 @@ app = FastAPI(
     version="11.1.0",
     lifespan=lifespan
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 origins = [
     "http://localhost:8000",
