@@ -28,7 +28,7 @@ from pocketbase import PocketBase
 from contextlib import asynccontextmanager
 
 import json
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import Limiter, _rate_limit_exceeded_handler, Request
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
