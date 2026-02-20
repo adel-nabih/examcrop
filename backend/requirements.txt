@@ -25,3 +25,5 @@ python-dotenv==1.0.0
 
 #cloudflare r2
 boto3
+
+slowapi

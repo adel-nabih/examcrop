@@ -28,6 +28,10 @@ from pocketbase import PocketBase
 from contextlib import asynccontextmanager
 
 import json
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
 
 from split_pdf import YOLOQuestionSplitter
 from dotenv import load_dotenv
@@ -45,20 +49,21 @@ POCKETBASE_PASSWORD = os.environ.get("POCKETBASE_PASSWORD")
 
 pb = PocketBase(POCKETBASE_URL)
 
-# ── R2 config ────────────────────────────────────────────────────────────────
 SAVE_TO_R2       = os.environ.get("SAVE_TO_R2", "true").lower() == "true"
 R2_ACCOUNT_ID    = os.environ.get("R2_ACCOUNT_ID")
 R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID")
 R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY")
 R2_BUCKET_NAME   = os.environ.get("R2_BUCKET_NAME", "examcrop-uploads")
 R2_ENDPOINT      = f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com" if R2_ACCOUNT_ID else None
-# ─────────────────────────────────────────────────────────────────────────────
 
 r2_client    = None
 yolo_splitter = None
 thread_pool   = None
 process_pool  = None
 
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 def get_r2_client():
     """Initialize boto3 S3-compatible client for Cloudflare R2"""
@@ -209,7 +214,9 @@ def read_root():
 
 @app.post("/split")
 @app.post("/api/split")
+@limiter.limit("5/minute")
 async def split_worksheet(
+    request: Request,
     file: UploadFile = File(...),
     dpi: int = 250,
     debug: bool = False,
