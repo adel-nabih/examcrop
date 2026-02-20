@@ -3,7 +3,7 @@ FastAPI Backend for Worksheet Splitter - OPTIMIZED
 YOLOv26 Custom Model with Parallel Processing & Caching
 """
 
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Request
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import tempfile
@@ -28,7 +28,7 @@ from pocketbase import PocketBase
 from contextlib import asynccontextmanager
 
 import json
-from slowapi import Limiter, _rate_limit_exceeded_handler, Request
+from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
