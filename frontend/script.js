@@ -54,7 +54,7 @@ const downloadAll = document.getElementById('downloadAll');
 let selectedFile = null;
 let originalFilePages = [];
 let pendingDownload = null;
-let processedQuestions = [];
+let processedQuestions = [];  // now holds one entry per page of the combined PDF
 let currentQuestionIndex = 0;
 let currentViewMode = 'results';
 let isDemo = false;
@@ -270,7 +270,6 @@ function updateOriginalViewerUI() {
     if (originalFilePages.length === 0) return;
     
     const current = originalFilePages[currentQuestionIndex];
-    
     viewerImage.src = current.imageUrl;
     
     if (originalFilePages.length > 1) {
@@ -290,21 +289,24 @@ function updateResultsViewerUI() {
     if (processedQuestions.length === 0) return;
     
     const current = processedQuestions[currentQuestionIndex];
-    
     viewerImage.src = current.imageUrl;
     
+    // Label each page as a question (1-indexed)
     viewerCounter.textContent = `Question ${currentQuestionIndex + 1} of ${processedQuestions.length}`;
     
     viewerPrev.disabled = currentQuestionIndex === 0;
     viewerNext.disabled = currentQuestionIndex === processedQuestions.length - 1;
     
-    downloadCurrent.style.display = 'inline-block';
-    downloadAll.textContent = 'Download All (ZIP)';
+    // Hide per-question download since we only have the combined PDF now
+    downloadCurrent.style.display = 'none';
+    downloadAll.textContent = `Download All Questions (PDF)`;
 }
 
 function navigateQuestion(direction) {
     const newIndex = currentQuestionIndex + direction;
-    const maxIndex = currentViewMode === 'original' ? originalFilePages.length - 1 : processedQuestions.length - 1;
+    const maxIndex = currentViewMode === 'original'
+        ? originalFilePages.length - 1
+        : processedQuestions.length - 1;
     
     if (newIndex >= 0 && newIndex <= maxIndex) {
         currentQuestionIndex = newIndex;
@@ -317,88 +319,72 @@ function navigateQuestion(direction) {
     }
 }
 
+/**
+ * Extract the combined PDF from the ZIP, then render every page
+ * into processedQuestions as individual image entries.
+ */
 async function extractQuestionsFromZip(blob) {
     try {
         if (typeof JSZip === 'undefined') {
             await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
         }
         
-        const zip = new JSZip();
-        const zipContent = await zip.loadAsync(blob);
-        
-        const questions = [];
-        const pdfFiles = [];
-        
-        zipContent.forEach((relativePath, zipEntry) => {
-            if (relativePath.endsWith('.pdf') && !relativePath.includes('combined')) {
-                pdfFiles.push({ name: relativePath, entry: zipEntry });
-            }
-        });
-        
-        pdfFiles.sort((a, b) => a.name.localeCompare(b.name));
-        
-        console.log(`Found ${pdfFiles.length} question PDFs in ZIP`);
-        
-        for (const pdfFile of pdfFiles) {
-            const pdfBlob = await pdfFile.entry.async('blob');
-            const imageUrl = await convertPdfToImage(pdfBlob);
-            
-            questions.push({
-                name: pdfFile.name,
-                imageUrl: imageUrl,
-                blob: pdfBlob
-            });
-        }
-        
-        return questions;
-        
-    } catch (error) {
-        console.error('Error extracting questions:', error);
-        
-        const questionCount = pendingDownload.questionCount || 3;
-        const questions = [];
-        
-        for (let i = 0; i < questionCount; i++) {
-            questions.push({
-                name: `question_${String(i + 1).padStart(2, '0')}.pdf`,
-                imageUrl: createPlaceholderImage(i + 1),
-                blob: blob
-            });
-        }
-        
-        return questions;
-    }
-}
-
-async function convertPdfToImage(pdfBlob) {
-    try {
         if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         }
-        
-        const arrayBuffer = await pdfBlob.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        
-        const page = await pdf.getPage(1);
-        
-        const scale = 2.0;
-        const viewport = page.getViewport({ scale: scale });
-        
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-        
-        await page.render({
-            canvasContext: context,
-            viewport: viewport
-        }).promise;
-        
-        return canvas.toDataURL('image/png');
-        
+
+        const zip = new JSZip();
+        const zipContent = await zip.loadAsync(blob);
+
+        // Pull out the combined PDF — it's the only PDF in the ZIP now
+        let combinedEntry = null;
+        zipContent.forEach((relativePath, zipEntry) => {
+            if (relativePath.endsWith('.pdf')) {
+                combinedEntry = zipEntry;
+            }
+        });
+
+        if (!combinedEntry) {
+            throw new Error('Combined PDF not found in ZIP');
+        }
+
+        const combinedBlob = await combinedEntry.async('blob');
+        const arrayBuffer  = await combinedBlob.arrayBuffer();
+        const pdf          = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+        console.log(`Rendering ${pdf.numPages} pages from combined PDF`);
+
+        const pages = [];
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page     = await pdf.getPage(i);
+            const scale    = 2.0;
+            const viewport = page.getViewport({ scale });
+
+            const canvas  = document.createElement('canvas');
+            canvas.width  = viewport.width;
+            canvas.height = viewport.height;
+
+            await page.render({
+                canvasContext: canvas.getContext('2d'),
+                viewport
+            }).promise;
+
+            pages.push({
+                pageNumber: i,
+                imageUrl:   canvas.toDataURL('image/png'),
+            });
+        }
+
+        return pages;
+
     } catch (error) {
-        console.error('Error converting PDF to image:', error);
-        return createPlaceholderImage(1);
+        console.error('Error extracting combined PDF:', error);
+
+        // Fallback: single placeholder so the viewer still opens
+        return [{
+            pageNumber: 1,
+            imageUrl:   createPlaceholderImage(1),
+        }];
     }
 }
 
@@ -478,12 +464,11 @@ modalClose.addEventListener('click', () => {
 emailForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     
-    const email = emailInput.value.trim();
+    const email   = emailInput.value.trim();
     const comment = commentInput.value.trim();
-    const optIn = marketingOptIn.checked;
+    const optIn   = marketingOptIn.checked;
     
     submitEmail(email, comment, optIn);
-    
     hideEmailModal();
     
     if (pendingDownload && processedQuestions.length > 0) {
@@ -512,31 +497,25 @@ viewerNext.addEventListener('click', () => navigateQuestion(1));
 
 document.addEventListener('keydown', (e) => {
     if (!viewerOverlay.classList.contains('show')) return;
-    
-    if (e.key === 'ArrowLeft') {
-        navigateQuestion(-1);
-    } else if (e.key === 'ArrowRight') {
-        navigateQuestion(1);
-    } else if (e.key === 'Escape') {
-        hideViewer();
-    }
+    if (e.key === 'ArrowLeft')  navigateQuestion(-1);
+    if (e.key === 'ArrowRight') navigateQuestion(1);
+    if (e.key === 'Escape')     hideViewer();
 });
 
-downloadCurrent.addEventListener('click', async () => {
-    if (pendingDownload && processedQuestions.length > 0) {
-        const currentQuestion = processedQuestions[currentQuestionIndex];
-        triggerDownload(currentQuestion.blob, currentQuestion.name);
-        showSuccess(`Downloading ${currentQuestion.name}...`);
+// "Download This Question" hidden — only combined PDF download available
+downloadCurrent.addEventListener('click', () => {
+    if (pendingDownload) {
+        triggerDownload(pendingDownload.blob, pendingDownload.filename);
     }
 });
 
 downloadAll.addEventListener('click', () => {
     if (currentViewMode === 'original' && selectedFile) {
         triggerDownload(selectedFile, selectedFile.name);
-        showSuccess(`Downloading original file...`);
+        showSuccess('Downloading original file...');
     } else if (pendingDownload) {
         triggerDownload(pendingDownload.blob, pendingDownload.filename);
-        showSuccess(`Downloading all ${processedQuestions.length} questions...`);
+        showSuccess(`Downloading ${processedQuestions.length} questions as PDF...`);
     }
 });
 
@@ -553,7 +532,7 @@ splitBtn.addEventListener('click', async () => {
         const formData = new FormData();
         formData.append('file', selectedFile);
 
-        const url = `${API_BASE}/api/split?dpi=200&conf_threshold=0.10`;
+        const url = `${API_BASE}/api/split?dpi=200&conf_threshold=0.10${isDemo ? '&is_sample=true' : ''}`;
 
         console.log('Uploading to:', url);
         console.log('File:', selectedFile.name, selectedFile.size);
@@ -561,7 +540,7 @@ splitBtn.addEventListener('click', async () => {
         updateProgress(10, 'Uploading... 10%');
         
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 180000);
+        const timeoutId  = setTimeout(() => controller.abort(), 180000);
 
         updateProgress(30, 'Uploading... 30%');
         
@@ -573,31 +552,30 @@ splitBtn.addEventListener('click', async () => {
         });
 
         clearTimeout(timeoutId);
-        
         updateProgress(50, 'Processing... 50%');
 
         console.log('Response status:', response.status);
 
         if (!response.ok) {
-            let errorMsg = 'Something went wrong. Please try again.';
+            let errText = 'Something went wrong. Please try again.';
             try {
                 const errorData = await response.json();
-                errorMsg = errorData.detail || errorMsg;
+                errText = errorData.detail || errText;
             } catch (e) {
                 if (response.status === 429) {
-                    errorMsg = 'Too many requests. Please wait an hour and try again.';
+                    errText = 'Too many requests. Please wait an hour and try again.';
                 } else if (response.status === 413) {
-                    errorMsg = 'File is too large. Maximum size is 20MB.';
+                    errText = 'File is too large. Maximum size is 20MB.';
                 } else {
-                    errorMsg = `Server error (${response.status}). Please try again.`;
+                    errText = `Server error (${response.status}). Please try again.`;
                 }
             }
-            throw new Error(errorMsg);
+            throw new Error(errText);
         }
 
         updateProgress(70, 'Splitting questions... 70%');
 
-        const questionCount = response.headers.get('X-Questions-Count');
+        const questionCount      = response.headers.get('X-Questions-Count');
         const contentDisposition = response.headers.get('Content-Disposition');
         let filename = 'questions.zip';
         
@@ -609,7 +587,6 @@ splitBtn.addEventListener('click', async () => {
         }
 
         console.log('Downloading:', filename, 'Questions:', questionCount);
-
         updateProgress(90, 'Finalizing... 90%');
 
         let blob;
@@ -628,17 +605,17 @@ splitBtn.addEventListener('click', async () => {
         updateProgress(100, 'Complete! 100%');
 
         pendingDownload = {
-            blob: blob,
-            filename: filename,
+            blob:          blob,
+            filename:      filename,
             questionCount: parseInt(questionCount) || 0
         };
 
         updateProgress(100, 'Preparing preview...');
 
-        processedQuestions = await extractQuestionsFromZip(blob);
+        processedQuestions  = await extractQuestionsFromZip(blob);
         currentQuestionIndex = 0;
 
-        console.log(`Extracted ${processedQuestions.length} questions for preview`);
+        console.log(`Rendered ${processedQuestions.length} pages for preview`);
 
         setTimeout(() => {
             progressContainer.classList.remove('show');
@@ -666,14 +643,14 @@ splitBtn.addEventListener('click', async () => {
 window.addEventListener('DOMContentLoaded', async () => {
     try {
         const response = await fetch(`${API_BASE}/api/health`);
-        const data = await response.json();
+        const data     = await response.json();
         
         if (!data.model_ready) {
             showError('Service is temporarily unavailable. Please try again later.');
-            uploadArea.style.opacity = '0.5';
+            uploadArea.style.opacity      = '0.5';
             uploadArea.style.pointerEvents = 'none';
-            sampleBtn.style.opacity = '0.5';
-            sampleBtn.style.pointerEvents = 'none';
+            sampleBtn.style.opacity       = '0.5';
+            sampleBtn.style.pointerEvents  = 'none';
         }
     } catch (error) {
         console.error('Health check failed:', error);

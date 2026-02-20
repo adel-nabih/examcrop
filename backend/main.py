@@ -213,11 +213,22 @@ async def split_worksheet(
     file: UploadFile = File(...),
     dpi: int = 250,
     debug: bool = False,
-    conf_threshold: float = 0.10
+    conf_threshold: float = 0.10,
+    is_sample: bool = False,
 ):
     """
     Split worksheets using custom-trained YOLOv26 model - OPTIMIZED VERSION
     """
+    # Log sample usage to PocketBase without uploading to R2
+    if is_sample:
+        try:
+            pb.collection('leads').create({
+                "email": "",
+                "feedback": "sample_viewed",
+                "timestamp": datetime.now().isoformat(),
+            })
+        except Exception as e:
+            print(f"⚠️ Could not log sample view: {e}")
 
     if yolo_splitter is None:
         raise HTTPException(
@@ -318,12 +329,10 @@ async def split_worksheet(
         combined_pdf.save(combined_path, garbage=4, deflate=True, clean=True, pretty=False)
         combined_pdf.close()
 
-        # Build ZIP in memory
+        # Build ZIP in memory — combined PDF only
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
             zip_file.write(combined_path, 'all_questions_combined.pdf')
-            for pdf_file in sorted(output_files):
-                zip_file.write(pdf_file, pdf_file.name)
             if debug:
                 for debug_file in Path(temp_dir).glob('debug_*.png'):
                     zip_file.write(debug_file, f"debug/{debug_file.name}")
@@ -337,7 +346,7 @@ async def split_worksheet(
         print(f"✓ Total time: {total_time:.2f}s | ZIP: {zip_filename} ({len(zip_buffer.getvalue()) / 1024 / 1024:.2f}MB)")
 
         # ── Background R2 upload ─────────────────────────────────────────────
-        if SAVE_TO_R2 and r2_client:
+        if SAVE_TO_R2 and r2_client and not is_sample:
             background_data = {
                 'input_path':      input_path,
                 'output_files':    [str(f) for f in sorted(output_files)],
