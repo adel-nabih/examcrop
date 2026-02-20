@@ -139,6 +139,12 @@ async function handleFile(file) {
     
     fileInfo.classList.add('show');
     splitBtn.classList.add('show');
+
+    // Reset state from any previous upload
+    previewButtons.classList.remove('show');
+    processedQuestions = [];
+    pendingDownload = null;
+    currentQuestionIndex = 0;
     
     hideMessages();
     
