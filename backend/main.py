@@ -245,7 +245,7 @@ async def split_worksheet(
         )
 
     MAX_SIZE  = 20 * 1024 * 1024
-    MAX_PAGES = 200
+    MAX_PAGES = 20
 
     contents      = await file.read()
     file_size_mb  = len(contents) / (1024 * 1024)
