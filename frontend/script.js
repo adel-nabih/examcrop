@@ -433,8 +433,8 @@ async function extractQuestionsFromZip(blob) {
 
         console.log(`Rendering ${pdf.numPages} pages from combined PDF`);
 
-        const pages = [];
-        for (let i = 1; i <= pdf.numPages; i++) {
+        // Render all pages in parallel for speed
+        const renderPage = async (i) => {
             const page     = await pdf.getPage(i);
             const scale    = 2.0;
             const viewport = page.getViewport({ scale });
@@ -448,12 +448,19 @@ async function extractQuestionsFromZip(blob) {
                 viewport
             }).promise;
 
-            pages.push({
+            return {
                 pageNumber: i,
                 imageUrl:   canvas.toDataURL('image/png'),
-            });
+            };
+        };
+
+        const pagePromises = [];
+        for (let i = 1; i <= pdf.numPages; i++) {
+            pagePromises.push(renderPage(i));
         }
 
+        // Promise.all preserves order
+        const pages = await Promise.all(pagePromises);
         return pages;
 
     } catch (error) {
@@ -544,12 +551,72 @@ emailForm.addEventListener('submit', async (e) => {
     submitEmail(email, comment, optIn);
     hideEmailModal();
 
-    // Trigger the actual download now that email is collected
-    if (pendingDownload) {
-        triggerDownload(pendingDownload.blob, pendingDownload.filename);
-        showSuccess(`Downloading ${processedQuestions.length} questions...`);
+    // Rebuild PDF from surviving pages then download
+    if (pendingDownload && processedQuestions.length > 0) {
+        buildAndDownloadPdf();
     }
 });
+
+/**
+ * Re-render the current processedQuestions into a fresh PDF using pdf-lib,
+ * falling back to the original ZIP blob if pdf-lib is unavailable.
+ */
+async function buildAndDownloadPdf() {
+    try {
+        // Load pdf-lib on demand
+        if (typeof PDFLib === 'undefined') {
+            await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js');
+        }
+
+        if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc =
+                'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+
+        // Extract the combined PDF blob from the ZIP
+        if (typeof JSZip === 'undefined') {
+            await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+        }
+
+        const zip        = new JSZip();
+        const zipContent = await zip.loadAsync(pendingDownload.blob);
+
+        let combinedEntry = null;
+        zipContent.forEach((relativePath, entry) => {
+            if (relativePath.endsWith('.pdf')) combinedEntry = entry;
+        });
+
+        if (!combinedEntry) throw new Error('Combined PDF not found');
+
+        const combinedBlob  = await combinedEntry.async('blob');
+        const combinedArray = await combinedBlob.arrayBuffer();
+        const srcPdf        = await pdfjsLib.getDocument({ data: combinedArray.slice(0) }).promise;
+
+        // Build a new PDF containing only the surviving page numbers
+        const { PDFDocument } = PDFLib;
+        const srcBytes  = new Uint8Array(combinedArray);
+        const srcDoc    = await PDFDocument.load(srcBytes);
+        const outDoc    = await PDFDocument.create();
+
+        // processedQuestions[i].pageNumber is 1-indexed
+        const survivingIndexes = processedQuestions.map(q => q.pageNumber - 1);
+
+        const copied = await outDoc.copyPages(srcDoc, survivingIndexes);
+        copied.forEach(page => outDoc.addPage(page));
+
+        const outBytes = await outDoc.save();
+        const outBlob  = new Blob([outBytes], { type: 'application/pdf' });
+
+        const baseName = pendingDownload.filename.replace('_questions.zip', '');
+        triggerDownload(outBlob, `${baseName}_questions.pdf`);
+        showSuccess(`Downloaded ${processedQuestions.length} question${processedQuestions.length !== 1 ? 's' : ''} as PDF`);
+
+    } catch (err) {
+        console.error('PDF rebuild failed, falling back to original ZIP:', err);
+        triggerDownload(pendingDownload.blob, pendingDownload.filename);
+        showSuccess(`Downloading questions...`);
+    }
+}
 
 // Preview Button Listeners
 previewOriginalBtn.addEventListener('click', () => {
@@ -570,10 +637,13 @@ viewerClose.addEventListener('click', hideViewer);
 // Trash — remove current question from results
 viewerTrash.addEventListener('click', () => {
     if (processedQuestions.length <= 1) {
-        // Don't allow deleting the last question
-        viewerTrash.style.animation = 'none';
-        viewerTrash.textContent = '⚠️';
-        setTimeout(() => { viewerTrash.textContent = '🗑'; }, 1000);
+        // Can't delete the last page — flash the button
+        viewerTrash.style.borderColor = 'rgba(220,53,69,0.8)';
+        viewerTrash.style.boxShadow   = '0 0 12px rgba(220,53,69,0.5)';
+        setTimeout(() => {
+            viewerTrash.style.borderColor = '';
+            viewerTrash.style.boxShadow   = '';
+        }, 800);
         return;
     }
 
