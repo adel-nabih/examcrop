@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-YOLOv11-Based Question Splitter - HEAVILY OPTIMIZED
+YOLOv26-Based Question Splitter - HEAVILY OPTIMIZED
 Key Improvements:
 1. Parallel processing of PDF pages
 2. Direct PDF cropping without unnecessary image conversions

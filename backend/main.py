@@ -3,7 +3,7 @@ FastAPI Backend for Worksheet Splitter - OPTIMIZED
 YOLOv26 Custom Model with Parallel Processing & Caching
 """
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Request
+from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import tempfile
@@ -28,12 +28,10 @@ from pocketbase import PocketBase
 from contextlib import asynccontextmanager
 
 import json
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-
 
 from split_pdf import YOLOQuestionSplitter
+import pillow_heif
+from PIL import Image
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -49,19 +47,19 @@ POCKETBASE_PASSWORD = os.environ.get("POCKETBASE_PASSWORD")
 
 pb = PocketBase(POCKETBASE_URL)
 
+# ── R2 config ────────────────────────────────────────────────────────────────
 SAVE_TO_R2       = os.environ.get("SAVE_TO_R2", "true").lower() == "true"
 R2_ACCOUNT_ID    = os.environ.get("R2_ACCOUNT_ID")
 R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID")
 R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY")
 R2_BUCKET_NAME   = os.environ.get("R2_BUCKET_NAME", "examcrop-uploads")
 R2_ENDPOINT      = f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com" if R2_ACCOUNT_ID else None
+# ─────────────────────────────────────────────────────────────────────────────
 
 r2_client    = None
 yolo_splitter = None
 thread_pool   = None
 process_pool  = None
-
-limiter = Limiter(key_func=get_remote_address)
 
 
 def get_r2_client():
@@ -178,8 +176,6 @@ app = FastAPI(
     version="11.1.0",
     lifespan=lifespan
 )
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 origins = [
     "http://localhost:8000",
@@ -215,17 +211,17 @@ def read_root():
 
 @app.post("/split")
 @app.post("/api/split")
-@limiter.limit("5/minute")
 async def split_worksheet(
-    request: Request,
     file: UploadFile = File(...),
     dpi: int = 250,
     debug: bool = False,
     conf_threshold: float = 0.10,
     is_sample: bool = False,
+    pages: str = None,
 ):
     """
     Split worksheets using custom-trained YOLOv26 model - OPTIMIZED VERSION
+    pages: optional comma-separated list of 1-indexed page numbers e.g. "1,3,5,6,7"
     """
     # Log sample usage to PocketBase without uploading to R2
     if is_sample:
@@ -256,7 +252,7 @@ async def split_worksheet(
             detail=f"File too large ({file_size_mb:.1f}MB). Maximum file size is 20MB."
         )
 
-    allowed_extensions = ['.jpg', '.jpeg', '.png', '.pdf']
+    allowed_extensions = ['.jpg', '.jpeg', '.png', '.pdf', '.heic', '.heif']
     file_ext = Path(file.filename).suffix.lower()
 
     if file_ext not in allowed_extensions:
@@ -282,6 +278,19 @@ async def split_worksheet(
         with open(input_path, 'wb') as f:
             f.write(contents)
 
+        # Convert HEIC/HEIF to JPEG before any processing
+        if file_ext in ('.heic', '.heif'):
+            try:
+                pillow_heif.register_heif_opener()
+                img = Image.open(input_path)
+                converted_path = os.path.join(temp_dir, Path(file.filename).stem + '.jpg')
+                img.save(converted_path, 'JPEG', quality=95)
+                input_path = converted_path
+                file_ext = '.jpg'
+                print(f"✅ Converted HEIC to JPEG: {converted_path}")
+            except Exception as e:
+                raise HTTPException(status_code=422, detail=f"Could not convert HEIC file: {str(e)}")
+
         if file_ext == '.pdf':
             try:
                 doc        = fitz.open(input_path)
@@ -293,6 +302,38 @@ async def split_worksheet(
                         status_code=413,
                         detail=f"Your PDF has {page_count} pages. Maximum {MAX_PAGES} pages supported."
                     )
+
+                # ── Page selection: extract subset into a new PDF ──────────
+                if pages:
+                    try:
+                        requested = [int(p.strip()) for p in pages.split(',') if p.strip()]
+                        # Validate all requested pages are in range
+                        invalid = [p for p in requested if p < 1 or p > page_count]
+                        if invalid:
+                            raise HTTPException(
+                                status_code=400,
+                                detail=f"Page numbers out of range: {invalid}. PDF has {page_count} pages."
+                            )
+
+                        # Build a new PDF with only the selected pages
+                        src_doc     = fitz.open(input_path)
+                        subset_doc  = fitz.open()
+                        for p in sorted(set(requested)):
+                            subset_doc.insert_pdf(src_doc, from_page=p - 1, to_page=p - 1)
+                        src_doc.close()
+
+                        subset_path = os.path.join(temp_dir, f"subset_{file.filename}")
+                        subset_doc.save(subset_path, garbage=4, deflate=True)
+                        subset_doc.close()
+
+                        input_path  = subset_path
+                        page_count  = len(requested)
+                        print(f"  → Page selection applied: {sorted(set(requested))} ({page_count} pages)")
+                    except HTTPException:
+                        raise
+                    except Exception as e:
+                        print(f"Warning: Could not apply page selection: {e}")
+                # ─────────────────────────────────────────────────────────
 
                 print(f"\nProcessing: {file.filename} ({file_size_mb:.1f}MB, {page_count} pages)")
             except HTTPException:

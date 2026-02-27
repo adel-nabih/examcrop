@@ -34,7 +34,6 @@ const errorMsg = document.getElementById('errorMsg');
 const successMsg = document.getElementById('successMsg');
 
 const modalOverlay = document.getElementById('modalOverlay');
-const modalClose = document.getElementById('modalClose');
 const emailForm = document.getElementById('emailForm');
 const emailInput = document.getElementById('emailInput');
 const commentInput = document.getElementById('commentInput');
@@ -50,6 +49,18 @@ const viewerNext = document.getElementById('viewerNext');
 const downloadCurrent = document.getElementById('downloadCurrent');
 const downloadAll = document.getElementById('downloadAll');
 
+// Page selector
+const pageSelector      = document.getElementById('pageSelector');
+const pageSelectorTotal = document.getElementById('pageSelectorTotal');
+const pageRangeAll      = document.getElementById('pageRangeAll');
+const pageRangeCustom   = document.getElementById('pageRangeCustom');
+const pageRangeInputWrap= document.getElementById('pageRangeInputWrap');
+const pageRangeInput    = document.getElementById('pageRangeInput');
+const pageRangeError    = document.getElementById('pageRangeError');
+
+// Viewer trash
+const viewerTrash = document.getElementById('viewerTrash');
+
 // State
 let selectedFile = null;
 let originalFilePages = [];
@@ -59,7 +70,52 @@ let currentQuestionIndex = 0;
 let currentViewMode = 'results';
 let isDemo = false;
 
-// Smooth scroll
+// ── Page selector helpers ────────────────────────────────────────────────
+
+let pageSelectorMode = 'all'; // 'all' | 'custom'
+
+pageRangeAll.addEventListener('click', () => {
+    pageSelectorMode = 'all';
+    pageRangeAll.classList.add('active');
+    pageRangeCustom.classList.remove('active');
+    pageRangeInputWrap.classList.remove('show');
+    pageRangeError.classList.remove('show');
+});
+
+pageRangeCustom.addEventListener('click', () => {
+    pageSelectorMode = 'custom';
+    pageRangeCustom.classList.add('active');
+    pageRangeAll.classList.remove('active');
+    pageRangeInputWrap.classList.add('show');
+    pageRangeInput.focus();
+});
+
+/**
+ * Parse a page range string like "1-5, 7, 9-12" into a sorted unique array.
+ * Returns null if the input is invalid.
+ */
+function parsePageRange(str, totalPages) {
+    const parts = str.split(',').map(s => s.trim()).filter(Boolean);
+    const pages = new Set();
+
+    for (const part of parts) {
+        if (/^\d+$/.test(part)) {
+            const n = parseInt(part);
+            if (n < 1 || n > totalPages) return null;
+            pages.add(n);
+        } else if (/^\d+-\d+$/.test(part)) {
+            const [a, b] = part.split('-').map(Number);
+            if (a < 1 || b > totalPages || a > b) return null;
+            for (let i = a; i <= b; i++) pages.add(i);
+        } else {
+            return null;
+        }
+    }
+
+    return pages.size > 0 ? [...pages].sort((a, b) => a - b) : null;
+}
+
+// ── Smooth scroll
 document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     anchor.addEventListener('click', function (e) {
         e.preventDefault();
@@ -145,6 +201,15 @@ async function handleFile(file) {
     processedQuestions = [];
     pendingDownload = null;
     currentQuestionIndex = 0;
+
+    // Reset page selector
+    pageSelectorMode = 'all';
+    pageRangeAll.classList.add('active');
+    pageRangeCustom.classList.remove('active');
+    pageRangeInputWrap.classList.remove('show');
+    pageRangeInput.value = '';
+    pageRangeError.classList.remove('show');
+    pageSelector.classList.remove('show');
     
     hideMessages();
     
@@ -189,6 +254,12 @@ async function loadOriginalFilePages(file) {
             }
             
             console.log(`Loaded ${originalFilePages.length} pages`);
+
+            // Show page selector for multi-page PDFs
+            if (pageCount > 1) {
+                pageSelectorTotal.textContent = `${pageCount} pages total`;
+                pageSelector.classList.add('show');
+            }
             
         } else if (file.type.startsWith('image/')) {
             const imageUrl = await readFileAsDataURL(file);
@@ -289,6 +360,7 @@ function updateOriginalViewerUI() {
     
     downloadCurrent.style.display = 'none';
     downloadAll.textContent = 'Download Original';
+    viewerTrash.classList.add('hidden');
 }
 
 function updateResultsViewerUI() {
@@ -306,6 +378,7 @@ function updateResultsViewerUI() {
     // Hide per-question download since we only have the combined PDF now
     downloadCurrent.style.display = 'none';
     downloadAll.textContent = `Download All Questions (PDF)`;
+    viewerTrash.classList.remove('hidden');
 }
 
 function navigateQuestion(direction) {
@@ -459,26 +532,22 @@ async function submitEmail(email, comment, marketingOptIn) {
     }
 }
 
-// Modal Event Listeners
-modalClose.addEventListener('click', () => {
-    hideEmailModal();
-    if (pendingDownload && processedQuestions.length > 0) {
-        showViewer('results');
-    }
-});
+// Modal Event Listeners — no close button, email required to download
 
 emailForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+
     const email   = emailInput.value.trim();
     const comment = commentInput.value.trim();
     const optIn   = marketingOptIn.checked;
-    
+
     submitEmail(email, comment, optIn);
     hideEmailModal();
-    
-    if (pendingDownload && processedQuestions.length > 0) {
-        showViewer('results');
+
+    // Trigger the actual download now that email is collected
+    if (pendingDownload) {
+        triggerDownload(pendingDownload.blob, pendingDownload.filename);
+        showSuccess(`Downloading ${processedQuestions.length} questions...`);
     }
 });
 
@@ -497,6 +566,26 @@ previewResultsBtn.addEventListener('click', () => {
 
 // Viewer Event Listeners
 viewerClose.addEventListener('click', hideViewer);
+
+// Trash — remove current question from results
+viewerTrash.addEventListener('click', () => {
+    if (processedQuestions.length <= 1) {
+        // Don't allow deleting the last question
+        viewerTrash.style.animation = 'none';
+        viewerTrash.textContent = '⚠️';
+        setTimeout(() => { viewerTrash.textContent = '🗑'; }, 1000);
+        return;
+    }
+
+    processedQuestions.splice(currentQuestionIndex, 1);
+
+    // Adjust index if we deleted the last item
+    if (currentQuestionIndex >= processedQuestions.length) {
+        currentQuestionIndex = processedQuestions.length - 1;
+    }
+
+    updateResultsViewerUI();
+});
 
 viewerPrev.addEventListener('click', () => navigateQuestion(-1));
 viewerNext.addEventListener('click', () => navigateQuestion(1));
@@ -517,11 +606,13 @@ downloadCurrent.addEventListener('click', () => {
 
 downloadAll.addEventListener('click', () => {
     if (currentViewMode === 'original' && selectedFile) {
+        // Original file — no gate
         triggerDownload(selectedFile, selectedFile.name);
         showSuccess('Downloading original file...');
     } else if (pendingDownload) {
-        triggerDownload(pendingDownload.blob, pendingDownload.filename);
-        showSuccess(`Downloading ${processedQuestions.length} questions as PDF...`);
+        // Gate results download behind email
+        hideViewer();
+        showEmailModal();
     }
 });
 
@@ -538,7 +629,23 @@ splitBtn.addEventListener('click', async () => {
         const formData = new FormData();
         formData.append('file', selectedFile);
 
-        const url = `${API_BASE}/api/split?dpi=200&conf_threshold=0.10${isDemo ? '&is_sample=true' : ''}`;
+        // Validate and apply page range if custom mode
+        let pageRangeParam = '';
+        if (pageSelectorMode === 'custom' && !isDemo) {
+            const totalPages = originalFilePages.length;
+            const parsed = parsePageRange(pageRangeInput.value, totalPages);
+            if (!parsed) {
+                pageRangeError.textContent = `Invalid range. Enter page numbers between 1 and ${totalPages}.`;
+                pageRangeError.classList.add('show');
+                splitBtn.disabled = false;
+                progressContainer.classList.remove('show');
+                return;
+            }
+            pageRangeError.classList.remove('show');
+            pageRangeParam = `&pages=${parsed.join(',')}`;
+        }
+
+        const url = `${API_BASE}/api/split?dpi=200&conf_threshold=0.10${isDemo ? '&is_sample=true' : ''}${pageRangeParam}`;
 
         console.log('Uploading to:', url);
         console.log('File:', selectedFile.name, selectedFile.size);
@@ -626,11 +733,12 @@ splitBtn.addEventListener('click', async () => {
         setTimeout(() => {
             progressContainer.classList.remove('show');
             previewButtons.classList.add('show');
-            
+
             if (isDemo) {
                 showViewer('results');
             } else {
-                showEmailModal();
+                // Open viewer directly — email gate fires on download
+                showViewer('results');
             }
         }, 500);
 

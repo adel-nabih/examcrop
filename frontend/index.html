@@ -63,16 +63,48 @@
             line-height: 1.6;
         }
 
+        /* ── Floating Navbar ───────────────────────────────────────────── */
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 20px 0;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            position: fixed;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: calc(100% - 40px);
+            max-width: 1100px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            border-radius: 16px;
+            padding: 12px 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            transition: background 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        /* When scrolled past hero, navbar gets solid white background */
+        .header.scrolled {
+            background: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+        }
+
+        .header.scrolled .logo {
+            color: #667eea;
+        }
+
+        .header.scrolled .nav-links a {
+            color: #555;
+        }
+
+        .header.scrolled .nav-links a:hover {
+            color: #667eea;
+        }
+
+        .header.scrolled .hamburger span {
+            background: #333;
         }
 
         .nav-container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 30px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -80,17 +112,35 @@
 
         .logo {
             color: white;
-            font-size: 24px;
+            font-size: 20px;
             font-weight: 700;
             text-decoration: none;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
+            transition: color 0.3s;
+        }
+
+        /* Inverted favicon: white background, purple E — serif lightweight to match favicon */
+        .logo-icon {
+            width: 28px;
+            height: 28px;
+            background: white;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 17px;
+            font-weight: 400;
+            font-family: Georgia, 'Times New Roman', serif;
+            color: #667eea;
+            flex-shrink: 0;
+            line-height: 1;
         }
 
         .nav-links {
             display: flex;
-            gap: 30px;
+            gap: 28px;
             align-items: center;
         }
 
@@ -98,16 +148,116 @@
             color: rgba(255, 255, 255, 0.9);
             text-decoration: none;
             font-weight: 500;
-            transition: color 0.2s;
+            font-size: 15px;
+            transition: color 0.2s, text-shadow 0.2s;
+            position: relative;
+            padding-bottom: 3px;
+        }
+
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 1.5px;
+            background: white;
+            border-radius: 2px;
+            transition: width 0.25s ease;
         }
 
         .nav-links a:hover {
             color: white;
+            text-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
         }
 
+        .nav-links a:hover::after {
+            width: 100%;
+        }
+
+        .header.scrolled .nav-links a::after {
+            background: #667eea;
+        }
+
+        .header.scrolled .nav-links a:hover {
+            text-shadow: 0 0 12px rgba(102, 126, 234, 0.5);
+        }
+
+        /* Hamburger */
+        .hamburger {
+            display: none;
+            flex-direction: column;
+            gap: 5px;
+            cursor: pointer;
+            padding: 4px;
+            background: none;
+            border: none;
+        }
+
+        .hamburger span {
+            display: block;
+            width: 22px;
+            height: 2px;
+            background: white;
+            border-radius: 2px;
+            transition: all 0.3s ease;
+        }
+
+        .hamburger.open span:nth-child(1) {
+            transform: translateY(7px) rotate(45deg);
+        }
+
+        .hamburger.open span:nth-child(2) {
+            opacity: 0;
+        }
+
+        .hamburger.open span:nth-child(3) {
+            transform: translateY(-7px) rotate(-45deg);
+        }
+
+        /* Mobile menu dropdown */
+        .mobile-menu {
+            display: none;
+            flex-direction: column;
+            gap: 4px;
+            padding-top: 12px;
+            margin-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .header.scrolled .mobile-menu {
+            border-top-color: rgba(0, 0, 0, 0.1);
+        }
+
+        .mobile-menu.open {
+            display: flex;
+        }
+
+        .mobile-menu a {
+            color: rgba(255, 255, 255, 0.9);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 16px;
+            padding: 10px 4px;
+            transition: color 0.2s;
+        }
+
+        .header.scrolled .mobile-menu a {
+            color: #555;
+        }
+
+        .mobile-menu a:hover {
+            color: white;
+        }
+
+        .header.scrolled .mobile-menu a:hover {
+            color: #667eea;
+        }
+
+        /* ── Hero ──────────────────────────────────────────────────────── */
         .hero {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 80px 30px 100px;
+            padding: 140px 30px 100px;
             text-align: center;
             color: white;
         }
@@ -170,6 +320,7 @@
             background: rgba(255, 255, 255, 0.1);
         }
 
+        /* ── Upload Section ────────────────────────────────────────────── */
         .upload-section {
             background: #f8f9ff;
             padding: 60px 30px;
@@ -325,7 +476,8 @@
 
         .preview-buttons {
             display: none;
-            gap: 15px;
+            flex-direction: column;
+            gap: 12px;
             margin-top: 25px;
         }
 
@@ -334,7 +486,7 @@
         }
 
         .preview-btn {
-            flex: 1;
+            width: 100%;
             padding: 16px;
             border-radius: 12px;
             font-size: 15px;
@@ -459,6 +611,7 @@
             color: #2a7a2a;
         }
 
+        /* ── Sections ──────────────────────────────────────────────────── */
         .how-it-works {
             padding: 80px 30px;
             background: white;
@@ -638,6 +791,7 @@
             opacity: 0.95;
         }
 
+        /* ── Footer ────────────────────────────────────────────────────── */
         .footer {
             background: #2d3748;
             color: white;
@@ -679,6 +833,7 @@
             font-size: 14px;
         }
 
+        /* ── Modals ────────────────────────────────────────────────────── */
         .modal-overlay {
             display: none;
             position: fixed;
@@ -812,6 +967,7 @@
             cursor: not-allowed;
         }
 
+        /* ── Viewer ────────────────────────────────────────────────────── */
         .viewer-overlay {
             display: none;
             position: fixed;
@@ -843,14 +999,15 @@
         .viewer-header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 20px 30px;
+            padding: 16px 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-shrink: 0;
         }
 
         .viewer-title {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 600;
         }
 
@@ -858,12 +1015,13 @@
             background: rgba(255, 255, 255, 0.2);
             border: none;
             color: white;
-            font-size: 24px;
-            width: 40px;
-            height: 40px;
+            font-size: 22px;
+            width: 36px;
+            height: 36px;
             border-radius: 8px;
             cursor: pointer;
             transition: background 0.2s;
+            flex-shrink: 0;
         }
 
         .viewer-close:hover {
@@ -894,19 +1052,19 @@
             gap: 20px;
             width: 100%;
             justify-content: space-between;
-            padding: 0 20px;
+            padding: 0 12px;
             pointer-events: none;
         }
 
         .viewer-nav button {
             pointer-events: all;
-            background: rgba(0, 0, 0, 0.6);
+            background: rgba(0, 0, 0, 0.55);
             border: none;
             color: white;
-            width: 50px;
-            height: 50px;
+            width: 44px;
+            height: 44px;
             border-radius: 50%;
-            font-size: 24px;
+            font-size: 22px;
             cursor: pointer;
             transition: all 0.2s;
             display: flex;
@@ -924,34 +1082,42 @@
             cursor: not-allowed;
         }
 
+        /* ── Viewer Footer — fixed single row ──────────────────────────── */
         .viewer-footer {
             background: white;
-            padding: 20px 30px;
+            padding: 14px 16px;
             border-top: 1px solid #e0e0e0;
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-shrink: 0;
+            min-height: 0;
         }
 
         .viewer-counter {
             color: #666;
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 600;
+            white-space: nowrap;
+            flex-shrink: 0;
         }
 
         .viewer-actions {
             display: flex;
-            gap: 15px;
+            gap: 10px;
+            flex-shrink: 0;
         }
 
         .viewer-btn {
-            padding: 10px 20px;
+            padding: 10px 16px;
             border-radius: 8px;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
             border: none;
+            white-space: nowrap;
         }
 
         .viewer-btn-primary {
@@ -973,25 +1139,171 @@
             background: #e0e0e0;
         }
 
+        /* ── Page selector ─────────────────────────────────────────────── */
+        .page-selector {
+            display: none;
+            background: #f8f9ff;
+            border: 1.5px solid #e0e4ff;
+            border-radius: 12px;
+            padding: 16px 18px;
+            margin-bottom: 20px;
+        }
+
+        .page-selector.show {
+            display: block;
+        }
+
+        .page-selector-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .page-selector-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #444;
+        }
+
+        .page-selector-total {
+            font-size: 13px;
+            color: #888;
+        }
+
+        .page-selector-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 0;
+        }
+
+        .page-range-btn {
+            padding: 7px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1.5px solid #667eea;
+            background: transparent;
+            color: #667eea;
+            transition: all 0.2s;
+        }
+
+        .page-range-btn.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .page-range-btn:hover:not(.active) {
+            background: #f0f2ff;
+        }
+
+        .page-range-input-wrap {
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 12px;
+        }
+
+        .page-range-input-wrap.show {
+            display: flex;
+        }
+
+        .page-range-input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1.5px solid #d0d4f0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.2s;
+            background: white;
+        }
+
+        .page-range-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .page-range-hint {
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        .page-range-error {
+            font-size: 12px;
+            color: #c33;
+            display: none;
+        }
+
+        .page-range-error.show {
+            display: block;
+        }
+
+        /* ── Viewer trash button ─────────────────────────────────────────── */
+        .viewer-trash {
+            position: absolute;
+            bottom: 16px;
+            right: 16px;
+            background: rgba(200, 50, 50, 0.75);
+            border: none;
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 17px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: all;
+        }
+
+        .viewer-trash:hover {
+            background: rgba(200, 50, 50, 1);
+            transform: scale(1.1);
+        }
+
+        .viewer-trash.hidden {
+            display: none;
+        }
+
+        /* ── Mobile ────────────────────────────────────────────────────── */
         @media (max-width: 768px) {
-            .hero h1 {
-                font-size: 36px;
-            }
-
-            .hero p {
-                font-size: 18px;
-            }
-
-            .section-title {
-                font-size: 32px;
-            }
-
-            .upload-container {
-                padding: 30px 25px;
+            .header {
+                top: 10px;
+                width: calc(100% - 24px);
+                padding: 10px 16px;
+                border-radius: 14px;
             }
 
             .nav-links {
                 display: none;
+            }
+
+            .hamburger {
+                display: flex;
+            }
+
+            .hero {
+                padding: 110px 20px 80px;
+            }
+
+            .hero h1 {
+                font-size: 34px;
+            }
+
+            .hero p {
+                font-size: 17px;
+            }
+
+            .section-title {
+                font-size: 30px;
+            }
+
+            .upload-container {
+                padding: 28px 20px;
             }
 
             .viewer-container {
@@ -1000,30 +1312,44 @@
                 border-radius: 0;
             }
 
-            .viewer-nav button {
-                width: 40px;
-                height: 40px;
-                font-size: 20px;
+            .viewer-title {
+                font-size: 15px;
             }
 
-            .preview-buttons {
-                flex-direction: column;
+            .viewer-btn {
+                padding: 9px 12px;
+                font-size: 12px;
+            }
+
+            .viewer-counter {
+                font-size: 13px;
             }
         }
     </style>
 </head>
 <body>
-    <header class="header">
+    <header class="header" id="mainHeader">
         <div class="nav-container">
             <a href="#" class="logo">
-                <span>Exam Crop</span>
+                <div class="logo-icon">E</div>
+                Exam Crop
             </a>
             <nav class="nav-links">
                 <a href="#how-it-works">How It Works</a>
                 <a href="#features">Features</a>
                 <a href="#upload">Try It Now</a>
             </nav>
+            <button class="hamburger" id="hamburger" aria-label="Menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
         </div>
+        <nav class="mobile-menu" id="mobileMenu">
+            <a href="#how-it-works" class="mobile-nav-link">How It Works</a>
+            <a href="#features" class="mobile-nav-link">Features</a>
+            <a href="#upload" class="mobile-nav-link">Try It Now</a>
+        </nav>
     </header>
 
     <section class="hero">
@@ -1045,17 +1371,40 @@
             <div class="upload-area" id="uploadArea">
                 <div class="upload-icon">📤</div>
                 <div class="upload-text">Click to upload or drag file here</div>
-                <div class="upload-hint">PDF, JPG, JPEG, or PNG • Max 20 pages • Max 20MB</div>
-                <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png">
+                <div class="upload-hint">PDF, JPG, JPEG, PNG, or HEIC • Max 20 pages • Max 20MB</div>
+                <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.heic,.heif">
             </div>
 
             <button class="sample-btn" id="sampleBtn">
-                See how it works with a sample worksheet
+                ✨ See how it works with a sample worksheet
             </button>
 
             <div class="file-info" id="fileInfo">
                 <div class="file-name" id="fileName"></div>
                 <div class="file-size" id="fileSize"></div>
+            </div>
+
+            <!-- Page range selector — shown after file loads, PDF only -->
+            <div class="page-selector" id="pageSelector">
+                <div class="page-selector-header">
+                    <span class="page-selector-label">Pages to split:</span>
+                    <span class="page-selector-total" id="pageSelectorTotal"></span>
+                </div>
+                <div class="page-selector-row">
+                    <button class="page-range-btn active" id="pageRangeAll" data-mode="all">All pages</button>
+                    <button class="page-range-btn" id="pageRangeCustom" data-mode="custom">Custom range</button>
+                </div>
+                <div class="page-range-input-wrap" id="pageRangeInputWrap">
+                    <input
+                        type="text"
+                        id="pageRangeInput"
+                        class="page-range-input"
+                        placeholder="e.g. 1-5, 7, 9-12"
+                        autocomplete="off"
+                    >
+                    <span class="page-range-hint">Separate pages with commas. Use hyphens for ranges.</span>
+                    <span class="page-range-error" id="pageRangeError"></span>
+                </div>
             </div>
 
             <button class="split-btn" id="splitBtn">Split into Questions</button>
@@ -1089,7 +1438,6 @@
     <section class="how-it-works" id="how-it-works">
         <h2 class="section-title">How It Works</h2>
         <p class="section-subtitle">Three simple steps to save hours of manual work</p>
-        
         <div class="steps">
             <div class="step">
                 <div class="step-number">1</div>
@@ -1112,7 +1460,6 @@
     <section class="features" id="features">
         <h2 class="section-title">Built for Teachers</h2>
         <p class="section-subtitle">Everything you need to prepare assignments faster</p>
-        
         <div class="features-grid">
             <div class="feature">
                 <div class="feature-icon">⚡</div>
@@ -1136,8 +1483,8 @@
             </div>
             <div class="feature">
                 <div class="feature-icon">💾</div>
-                <h3>Easy Organization</h3>
-                <p>Questions are automatically numbered and organized in a clean folder structure.</p>
+                <h3>Easy Organisation</h3>
+                <p>Questions are automatically numbered and organised in a clean folder structure.</p>
             </div>
             <div class="feature">
                 <div class="feature-icon">💎</div>
@@ -1150,7 +1497,6 @@
     <section class="formats">
         <h2 class="section-title">Works With Your Curriculum</h2>
         <p class="section-subtitle">Trained on multiple exam formats for accurate detection</p>
-        
         <div class="format-badges">
             <div class="format-badge">IGCSE</div>
             <div class="format-badge">IB</div>
@@ -1168,27 +1514,22 @@
                 <h3>How do I split a PDF exam into individual questions?</h3>
                 <p>Upload your PDF exam to Exam Crop, and our AI automatically detects question boundaries and splits each question into a separate PDF file. The process takes just seconds.</p>
             </div>
-            
             <div class="faq-item">
                 <h3>What exam formats does Exam Crop support?</h3>
-                <p>Exam Crop works with IGCSE, IB, SAT, Thanaweya Amma, Moasser exams, and custom worksheets. We support PDF, JPG, and PNG file formats up to 20 pages and 20MB.</p>
+                <p>Exam Crop works with IGCSE, IB, SAT, Thanaweya Amma, Moasser exams, and custom worksheets. We support PDF, JPG, PNG, and HEIC file formats up to 20 pages and 20MB.</p>
             </div>
-            
             <div class="faq-item">
                 <h3>Is Exam Crop free for teachers?</h3>
                 <p>Exam Crop is currently free during our early access phase. We're refining the platform and will introduce tiered plans with different limits in the future.</p>
             </div>
-            
             <div class="faq-item">
                 <h3>How accurate is the automatic question detection?</h3>
                 <p>Our AI model is trained on thousands of real exam papers from different exam boards, achieving high accuracy across IGCSE, IB, SAT, and other standardized test formats.</p>
             </div>
-            
             <div class="faq-item">
                 <h3>Can I use Exam Crop for worksheets and homework assignments?</h3>
                 <p>Yes! Exam Crop works with any structured worksheet or assignment where questions are clearly separated. It's perfect for creating individual practice problems for students.</p>
             </div>
-            
             <div class="faq-item">
                 <h3>What happens to my uploaded files?</h3>
                 <p>Your files are processed securely and stored to help improve our AI model's accuracy across diverse exam formats. This helps us better serve teachers worldwide.</p>
@@ -1227,32 +1568,16 @@
 
     <div class="modal-overlay" id="modalOverlay">
         <div class="modal">
-            <button class="modal-close" id="modalClose">×</button>
-            <h2>🎉 Almost done!</h2>
-            <p>Your questions are ready! <strong>Enter your email to download:</strong></p>
-            
+            <h2>📥 Download your questions</h2>
+            <p>Enter your email to download. We'll only contact you if you opt in below.</p>
             <form class="modal-form" id="emailForm">
-                <input 
-                    type="email" 
-                    id="emailInput" 
-                    placeholder="name@email.com"
-                    autocomplete="email"
-                    required
-                >
-                <textarea 
-                    id="commentInput" 
-                    placeholder="What would make this tool perfect for you? (optional)"
-                ></textarea>
-                
+                <input type="email" id="emailInput" placeholder="name@email.com" autocomplete="email" required>
+                <textarea id="commentInput" placeholder="Suggestions, comments, or anything you'd like us to know (optional)"></textarea>
                 <label class="checkbox-label">
-                    <input 
-                        type="checkbox" 
-                        id="marketingOptIn"
-                    >
-                    <span>Send me updates about new features and tips for using Exam Crop</span>
+                    <input type="checkbox" id="marketingOptIn">
+                    <span>Keep me updated on new features and improvements</span>
                 </label>
-                
-                <button type="submit">Download Questions</button>
+                <button type="submit" id="emailSubmitBtn">Download Now</button>
             </form>
         </div>
     </div>
@@ -1263,30 +1588,56 @@
                 <div class="viewer-title" id="viewerTitle">Questions Preview</div>
                 <button class="viewer-close" id="viewerClose">×</button>
             </div>
-            
             <div class="viewer-content" id="viewerContent">
                 <img class="viewer-image" id="viewerImage" alt="Question" />
-                
                 <div class="viewer-nav">
                     <button id="viewerPrev">‹</button>
                     <button id="viewerNext">›</button>
                 </div>
+                <button class="viewer-trash" id="viewerTrash" title="Remove this question">🗑</button>
             </div>
-            
             <div class="viewer-footer">
                 <div class="viewer-counter" id="viewerCounter">Question 1 of 1</div>
                 <div class="viewer-actions">
-                    <button class="viewer-btn viewer-btn-secondary" id="downloadCurrent">
-                        Download This Question
+                    <button class="viewer-btn viewer-btn-secondary" id="downloadCurrent" style="display:none">
+                        Download This
                     </button>
                     <button class="viewer-btn viewer-btn-primary" id="downloadAll">
-                        Download All (ZIP)
+                        Download All (PDF)
                     </button>
                 </div>
             </div>
         </div>
     </div>
 
+    <script>
+        // Hamburger menu
+        const hamburger = document.getElementById('hamburger');
+        const mobileMenu = document.getElementById('mobileMenu');
+        const mainHeader = document.getElementById('mainHeader');
+
+        hamburger.addEventListener('click', () => {
+            hamburger.classList.toggle('open');
+            mobileMenu.classList.toggle('open');
+        });
+
+        // Close mobile menu when a link is clicked
+        document.querySelectorAll('.mobile-nav-link').forEach(link => {
+            link.addEventListener('click', () => {
+                hamburger.classList.remove('open');
+                mobileMenu.classList.remove('open');
+            });
+        });
+
+        // Navbar scroll state
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 80) {
+                mainHeader.classList.add('scrolled');
+            } else {
+                mainHeader.classList.remove('scrolled');
+            }
+        });
+    </script>
     <script src="script.js"></script>
 </body>
 </html>
