@@ -589,17 +589,16 @@ async function buildAndDownloadPdf() {
         if (!combinedEntry) throw new Error('Combined PDF not found');
 
         const combinedBlob  = await combinedEntry.async('blob');
-        const combinedArray = await combinedBlob.arrayBuffer();
-        const srcPdf        = await pdfjsLib.getDocument({ data: combinedArray.slice(0) }).promise;
+        const combinedBytes = new Uint8Array(await combinedBlob.arrayBuffer());
 
-        // Build a new PDF containing only the surviving page numbers
+        // Build a new PDF containing only the surviving pages
         const { PDFDocument } = PDFLib;
-        const srcBytes  = new Uint8Array(combinedArray);
-        const srcDoc    = await PDFDocument.load(srcBytes);
-        const outDoc    = await PDFDocument.create();
+        const srcDoc = await PDFDocument.load(combinedBytes);
+        const outDoc = await PDFDocument.create();
 
-        // processedQuestions[i].pageNumber is 1-indexed
+        // processedQuestions[i].pageNumber is 1-indexed within the combined PDF
         const survivingIndexes = processedQuestions.map(q => q.pageNumber - 1);
+        console.log('Surviving page indexes:', survivingIndexes);
 
         const copied = await outDoc.copyPages(srcDoc, survivingIndexes);
         copied.forEach(page => outDoc.addPage(page));
