@@ -314,6 +314,15 @@ function updateProgress(percent, text) {
 }
 
 function showEmailModal() {
+    const savedEmail = localStorage.getItem('examcrop_email');
+    if (savedEmail) {
+        // Returning user — skip modal, log the upload linkage silently, download
+        submitEmail(savedEmail, '', false);
+        if (pendingDownload) {
+            buildAndDownloadPdf();
+        }
+        return;
+    }
     modalOverlay.classList.add('show');
 }
 
@@ -524,10 +533,12 @@ async function submitEmail(email, comment, marketingOptIn) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                email: email || "",
-                comment: comment || "",
+                email:            email || "",
+                comment:          comment || "",
                 marketing_opt_in: marketingOptIn || false,
-                timestamp: new Date().toISOString()
+                timestamp:        new Date().toISOString(),
+                upload_id:        window._lastUploadId || "",
+                is_returning:     !!localStorage.getItem('examcrop_email'),
             })
         });
         
@@ -549,6 +560,7 @@ emailForm.addEventListener('submit', async (e) => {
     const optIn   = marketingOptIn.checked;
 
     submitEmail(email, comment, optIn);
+    localStorage.setItem('examcrop_email', email);
     hideEmailModal();
 
     // Rebuild PDF from surviving pages then download
@@ -714,7 +726,8 @@ splitBtn.addEventListener('click', async () => {
             pageRangeParam = `&pages=${parsed.join(',')}`;
         }
 
-        const url = `${API_BASE}/api/split?dpi=200&conf_threshold=0.10${isDemo ? '&is_sample=true' : ''}${pageRangeParam}`;
+        const isReturning = !!localStorage.getItem('examcrop_email');
+        const url = `${API_BASE}/api/split?dpi=200&conf_threshold=0.10${isDemo ? '&is_sample=true' : ''}${pageRangeParam}&is_returning=${isReturning}`;
 
         console.log('Uploading to:', url);
         console.log('File:', selectedFile.name, selectedFile.size);
@@ -758,6 +771,8 @@ splitBtn.addEventListener('click', async () => {
         updateProgress(70, 'Splitting questions... 70%');
 
         const questionCount      = response.headers.get('X-Questions-Count');
+        const uploadId           = response.headers.get('X-Upload-Id');
+        if (uploadId) window._lastUploadId = uploadId;
         const contentDisposition = response.headers.get('Content-Disposition');
         let filename = 'questions.zip';
         

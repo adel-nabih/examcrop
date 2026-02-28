@@ -193,7 +193,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Questions-Count", "Content-Disposition"],
+    expose_headers=["X-Questions-Count", "Content-Disposition", "X-Upload-Id"],
 )
 
 
@@ -218,6 +218,7 @@ async def split_worksheet(
     conf_threshold: float = 0.10,
     is_sample: bool = False,
     pages: str = None,
+    is_returning: bool = False,
 ):
     """
     Split worksheets using custom-trained YOLOv26 model - OPTIMIZED VERSION
@@ -394,6 +395,23 @@ async def split_worksheet(
         total_time = time.time() - start_time
         print(f"✓ Total time: {total_time:.2f}s | ZIP: {zip_filename} ({len(zip_buffer.getvalue()) / 1024 / 1024:.2f}MB)")
 
+        # Log upload to PocketBase uploads collection
+        try:
+            pb.admins.auth_with_password(POCKETBASE_EMAIL, POCKETBASE_PASSWORD)
+            pb.collection('uploads').create({
+                "upload_id":          upload_id,
+                "filename":           file.filename,
+                "pages_processed":    page_count if file_ext == ".pdf" else 1,
+                "questions_detected": len(output_files),
+                "is_sample":          is_sample,
+                "is_returning":       is_returning,
+                "email":              "",
+                "timestamp":          datetime.utcnow().isoformat() + "Z",
+            })
+            print(f"Upload logged: {upload_id}")
+        except Exception as pb_err:
+            print(f"Could not log upload to PocketBase: {pb_err}")
+
         # ── Background R2 upload ─────────────────────────────────────────────
         if SAVE_TO_R2 and r2_client and not is_sample:
             background_data = {
@@ -477,6 +495,7 @@ async def split_worksheet(
             headers={
                 "Content-Disposition": f"attachment; filename={zip_filename}",
                 "X-Questions-Count":   str(len(output_files)),
+                "X-Upload-Id":         upload_id,
                 "X-Method":            "YOLOv26-Custom-Optimized",
             }
         )
@@ -615,23 +634,44 @@ async def get_sample_file():
 
 @app.post("/api/feedback")
 async def collect_feedback(request: dict):
-    """Collect user feedback and save to PocketBase"""
+    """Collect user feedback, save to leads, and link email to upload record"""
     try:
-        email     = request.get('email', '')
-        comment   = request.get('comment', '')
-        timestamp = request.get('timestamp', '')
+        email        = request.get('email', '')
+        comment      = request.get('comment', '')
+        timestamp    = request.get('timestamp', '')
+        upload_id    = request.get('upload_id', '')
+        is_returning = request.get('is_returning', False)
+        marketing    = request.get('marketing_opt_in', False)
 
         if not email and not comment:
             return {"status": "success", "message": "No data provided"}
 
-        data = {
-            "email":     email or "",
-            "feedback":  comment or "",
-            "timestamp": timestamp or "",
-        }
+        pb.admins.auth_with_password(POCKETBASE_EMAIL, POCKETBASE_PASSWORD)
 
+        # Save to leads collection
+        data = {
+            "email":            email or "",
+            "feedback":         comment or "",
+            "timestamp":        timestamp or "",
+            "is_returning":     is_returning,
+            "marketing_opt_in": marketing,
+        }
         record = pb.collection('leads').create(data)
-        print(f"✓ Saved lead: {email}")
+        print(f"Saved lead: {email} (returning={is_returning})")
+
+        # Link email to the upload record if we have an upload_id
+        if upload_id and email:
+            try:
+                results = pb.collection('uploads').get_list(1, 1, {
+                    "filter": f'upload_id = "{upload_id}"'
+                })
+                if results.items:
+                    pb.collection('uploads').update(results.items[0].id, {
+                        "email": email
+                    })
+                    print(f"Linked email to upload: {upload_id}")
+            except Exception as link_err:
+                print(f"Could not link email to upload: {link_err}")
 
         return {
             "status":  "success",
@@ -640,7 +680,7 @@ async def collect_feedback(request: dict):
         }
 
     except Exception as e:
-        print(f"❌ PocketBase save error: {e}")
+        print(f"PocketBase save error: {e}")
         return {"status": "error", "message": str(e)}
 
 
