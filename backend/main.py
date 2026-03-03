@@ -219,6 +219,8 @@ async def split_worksheet(
     is_sample: bool = False,
     pages: str = None,
     is_returning: bool = False,
+    returning_email: str = "",
+    source_page: str = "home",
 ):
     """
     Split worksheets using custom-trained YOLOv26 model - OPTIMIZED VERSION
@@ -405,7 +407,8 @@ async def split_worksheet(
                 "questions_detected": len(output_files),
                 "is_sample":          is_sample,
                 "is_returning":       is_returning,
-                "email":              "",
+                "source_page":        source_page,
+                "email":              returning_email if is_returning and returning_email else "",
                 "timestamp":          datetime.utcnow().isoformat() + "Z",
             })
             print(f"Upload logged: {upload_id}")
@@ -684,17 +687,36 @@ async def collect_feedback(request: dict):
         return {"status": "error", "message": str(e)}
 
 
+# Clean URL mappings — /pricing serves pricing.html, /igcse serves igcse.html etc.
+CLEAN_URL_MAP = {
+    "pricing":   "pricing.html",
+    "igcse":     "igcse.html",
+    "ib":        "ib.html",
+    "sat":       "sat.html",
+    "thanaweya": "thanaweya.html",
+}
+
 @app.get("/")
 @app.get("/{path_name:path}")
 async def serve_frontend(path_name: str = None):
     possible_folders = [Path("frontend"), Path("../frontend"), Path(".")]
 
+    # Clean URL: /pricing -> pricing.html
+    if path_name and path_name.rstrip("/") in CLEAN_URL_MAP:
+        target = CLEAN_URL_MAP[path_name.rstrip("/")]
+        for folder in possible_folders:
+            file_path = folder / target
+            if file_path.exists():
+                return FileResponse(file_path)
+
+    # Direct file requests (e.g. /script.js, /favicon/...)
     if path_name and "." in path_name:
         for folder in possible_folders:
             file_path = folder / path_name
             if file_path.exists():
                 return FileResponse(file_path)
 
+    # Everything else -> index.html
     for folder in possible_folders:
         index_path = folder / "index.html"
         if index_path.exists():

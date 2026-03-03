@@ -726,8 +726,11 @@ splitBtn.addEventListener('click', async () => {
             pageRangeParam = `&pages=${parsed.join(',')}`;
         }
 
-        const isReturning = !!localStorage.getItem('examcrop_email');
-        const url = `${API_BASE}/api/split?dpi=200&conf_threshold=0.10${isDemo ? '&is_sample=true' : ''}${pageRangeParam}&is_returning=${isReturning}`;
+        const savedEmail  = localStorage.getItem('examcrop_email') || '';
+        const isReturning = !!savedEmail;
+        const sourcePage  = window.EXAMCROP_SOURCE_PAGE || 'home';
+        const returningParam = isReturning ? `&returning_email=${encodeURIComponent(savedEmail)}` : '';
+        const url = `${API_BASE}/api/split?dpi=200&conf_threshold=0.10${isDemo ? '&is_sample=true' : ''}${pageRangeParam}&is_returning=${isReturning}${returningParam}&source_page=${sourcePage}`;
 
         console.log('Uploading to:', url);
         console.log('File:', selectedFile.name, selectedFile.size);
