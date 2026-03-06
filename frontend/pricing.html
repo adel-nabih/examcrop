@@ -9,153 +9,20 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="styles.css">
+
     <style>
+        /* ── Pricing-page-specific styles only ── */
+
         :root {
-            --purple: #667eea;
-            --purple-deep: #764ba2;
-            --dark: #1a1a2e;
-            --text: #2d2d3a;
-            --muted: #7a7a8c;
-            --border: #e8e8f0;
-            --bg: #fafafa;
-            --white: #ffffff;
             --green: #22c55e;
             --card-shadow: 0 2px 20px rgba(102,126,234,0.08), 0 1px 4px rgba(0,0,0,0.04);
             --card-shadow-hover: 0 8px 40px rgba(102,126,234,0.16), 0 2px 8px rgba(0,0,0,0.06);
         }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        body {
-            font-family: 'DM Sans', sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            line-height: 1.6;
-            min-height: 100vh;
-        }
-
-        /* ── Navbar (same floating style as main site) ── */
-        .header {
-            position: fixed;
-            top: 16px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: calc(100% - 40px);
-            max-width: 1100px;
-            background: rgba(255,255,255,0.15);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255,255,255,0.25);
-            border-radius: 16px;
-            padding: 12px 24px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.15);
-            z-index: 1000;
-            transition: background 0.3s, box-shadow 0.3s;
-        }
-
-        .header.scrolled {
-            background: rgba(255,255,255,0.96);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.10);
-        }
-
-        .nav-container {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            text-decoration: none;
-            color: white;
-            font-size: 19px;
-            font-weight: 600;
-            transition: color 0.3s;
-        }
-
-        .header.scrolled .logo { color: var(--dark); }
-
-        .logo-icon {
-            width: 28px; height: 28px;
-            background: white;
-            border-radius: 6px;
-            display: flex; align-items: center; justify-content: center;
-            font-family: Georgia, serif;
-            font-size: 17px; font-weight: 400;
-            color: var(--purple);
-            flex-shrink: 0;
-            transition: background 0.3s, color 0.3s;
-        }
-
-        .header.scrolled .logo-icon { background: var(--purple); color: white; }
-
-        .nav-links { display: flex; gap: 28px; align-items: center; }
-
-        .nav-links a {
-            color: rgba(255,255,255,0.9);
-            text-decoration: none;
-            font-weight: 500;
-            font-size: 15px;
-            transition: color 0.2s, text-shadow 0.2s;
-            position: relative;
-            padding-bottom: 3px;
-        }
-
-        .nav-links a::after {
-            content: '';
-            position: absolute; bottom: 0; left: 0;
-            width: 0; height: 1.5px;
-            background: white; border-radius: 2px;
-            transition: width 0.25s ease;
-        }
-
-        .nav-links a:hover { color: white; text-shadow: 0 0 12px rgba(255,255,255,0.6); }
-        .nav-links a:hover::after { width: 100%; }
-
-        .header.scrolled .nav-links a { color: #555; }
-        .header.scrolled .nav-links a::after { background: var(--purple); }
-        .header.scrolled .nav-links a:hover { color: var(--purple); text-shadow: 0 0 12px rgba(102,126,234,0.4); }
-
-        .hamburger {
-            display: none;
-            flex-direction: column; gap: 5px;
-            cursor: pointer; background: none; border: none; padding: 4px;
-        }
-
-        .hamburger span {
-            display: block; width: 22px; height: 2px;
-            background: white; border-radius: 2px;
-            transition: all 0.3s;
-        }
-
-        .header.scrolled .hamburger span { background: #333; }
-
-        .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
-        .hamburger.open span:nth-child(2) { opacity: 0; }
-        .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
-
-        .mobile-menu {
-            display: none;
-            flex-direction: column; gap: 4px;
-            padding-top: 12px; margin-top: 12px;
-            border-top: 1px solid rgba(255,255,255,0.2);
-        }
-
-        .header.scrolled .mobile-menu { border-top-color: rgba(0,0,0,0.1); }
-        .mobile-menu.open { display: flex; }
-
-        .mobile-menu a {
-            color: rgba(255,255,255,0.9);
-            text-decoration: none; font-weight: 500;
-            font-size: 16px; padding: 10px 4px;
-        }
-
-        .header.scrolled .mobile-menu a { color: #555; }
-
         /* ── Hero ── */
-        .hero {
+        .pricing-hero {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             padding: 140px 30px 80px;
             text-align: center;
@@ -163,7 +30,7 @@
             overflow: hidden;
         }
 
-        .hero::before {
+        .pricing-hero::before {
             content: '';
             position: absolute; inset: 0;
             background: radial-gradient(ellipse at 30% 50%, rgba(255,255,255,0.08) 0%, transparent 60%),
@@ -197,10 +64,10 @@
 
         @keyframes pulse {
             0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.6; transform: scale(0.85); }
+            50%       { opacity: 0.6; transform: scale(0.85); }
         }
 
-        .hero h1 {
+        .pricing-hero h1 {
             font-family: 'DM Serif Display', serif;
             font-size: 52px;
             color: white;
@@ -209,12 +76,9 @@
             font-weight: 400;
         }
 
-        .hero h1 em {
-            font-style: italic;
-            opacity: 0.9;
-        }
+        .pricing-hero h1 em { font-style: italic; opacity: 0.9; }
 
-        .hero p {
+        .pricing-hero p {
             color: rgba(255,255,255,0.88);
             font-size: 18px;
             max-width: 520px;
@@ -237,15 +101,24 @@
         }
 
         .card {
-            background: var(--white);
+            background: #fff;
             border-radius: 20px;
             padding: 36px 32px;
-            border: 1.5px solid var(--border);
+            border: 1.5px solid #e8e8f0;
             box-shadow: var(--card-shadow);
             transition: transform 0.25s, box-shadow 0.25s;
             position: relative;
             overflow: hidden;
+            opacity: 0;
+            transform: translateY(24px);
+            animation: fadeUp 0.5s ease forwards;
         }
+
+        .card:nth-child(1) { animation-delay: 0.1s; }
+        .card:nth-child(2) { animation-delay: 0.22s; }
+        .card:nth-child(3) { animation-delay: 0.34s; }
+
+        @keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
 
         .card:hover {
             transform: translateY(-4px);
@@ -253,7 +126,7 @@
         }
 
         .card.featured {
-            border-color: var(--purple);
+            border-color: #667eea;
             box-shadow: 0 4px 32px rgba(102,126,234,0.18), 0 1px 4px rgba(0,0,0,0.04);
         }
 
@@ -262,21 +135,20 @@
             position: absolute;
             top: 0; left: 0; right: 0;
             height: 3px;
-            background: linear-gradient(90deg, var(--purple), var(--purple-deep));
+            background: linear-gradient(90deg, #667eea, #764ba2);
         }
 
         .tier-name {
             font-family: 'DM Serif Display', serif;
             font-size: 22px;
-            color: var(--dark);
+            color: #1a1a2e;
             margin-bottom: 6px;
         }
 
         .tier-desc {
             font-size: 13px;
-            color: var(--muted);
+            color: #7a7a8c;
             margin-bottom: 24px;
-            font-weight: 400;
             line-height: 1.5;
         }
 
@@ -290,23 +162,19 @@
         .price-amount {
             font-family: 'DM Serif Display', serif;
             font-size: 48px;
-            color: var(--dark);
+            color: #1a1a2e;
             line-height: 1;
         }
 
         .price-currency {
             font-size: 22px;
-            color: var(--dark);
+            color: #1a1a2e;
             font-weight: 500;
             align-self: flex-start;
             margin-top: 8px;
         }
 
-        .price-period {
-            font-size: 14px;
-            color: var(--muted);
-            font-weight: 400;
-        }
+        .price-period { font-size: 14px; color: #7a7a8c; }
 
         .price-note {
             font-size: 12px;
@@ -321,7 +189,7 @@
             align-items: center;
             gap: 5px;
             background: #f3f0ff;
-            color: var(--purple);
+            color: #667eea;
             font-size: 11px;
             font-weight: 600;
             padding: 4px 10px;
@@ -332,12 +200,11 @@
             text-transform: uppercase;
         }
 
-        /* CTA buttons */
-        .btn-primary {
+        .pricing-btn-primary {
             display: block;
             width: 100%;
             padding: 14px;
-            background: linear-gradient(135deg, var(--purple), var(--purple-deep));
+            background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
             border: none;
             border-radius: 12px;
@@ -351,34 +218,12 @@
             margin-bottom: 28px;
         }
 
-        .btn-primary:hover {
+        .pricing-btn-primary:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 20px rgba(102,126,234,0.35);
         }
 
-        .btn-outline {
-            display: block;
-            width: 100%;
-            padding: 13px;
-            background: transparent;
-            color: var(--purple);
-            border: 1.5px solid var(--purple);
-            border-radius: 12px;
-            font-size: 15px;
-            font-weight: 600;
-            font-family: 'DM Sans', sans-serif;
-            cursor: pointer;
-            text-align: center;
-            transition: all 0.2s;
-            margin-bottom: 28px;
-        }
-
-        .btn-outline:hover {
-            background: var(--purple);
-            color: white;
-        }
-
-        /* Notify form inside card */
+        /* Notify form */
         .notify-form {
             display: flex;
             flex-direction: column;
@@ -389,25 +234,25 @@
         .notify-input {
             width: 100%;
             padding: 12px 14px;
-            border: 1.5px solid var(--border);
+            border: 1.5px solid #e8e8f0;
             border-radius: 10px;
             font-size: 14px;
             font-family: 'DM Sans', sans-serif;
-            color: var(--text);
+            color: #2d2d3a;
             transition: border-color 0.2s;
-            background: var(--bg);
+            background: #fafafa;
         }
 
         .notify-input:focus {
             outline: none;
-            border-color: var(--purple);
+            border-color: #667eea;
             background: white;
         }
 
         .notify-btn {
             width: 100%;
             padding: 12px;
-            background: linear-gradient(135deg, var(--purple), var(--purple-deep));
+            background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
             border: none;
             border-radius: 10px;
@@ -423,11 +268,7 @@
             box-shadow: 0 6px 16px rgba(102,126,234,0.3);
         }
 
-        .notify-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
+        .notify-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
         .notify-success {
             font-size: 13px;
@@ -451,32 +292,19 @@
             align-items: flex-start;
             gap: 10px;
             font-size: 14px;
-            color: var(--text);
-            font-weight: 400;
+            color: #2d2d3a;
             line-height: 1.45;
-        }
-
-        .feature-list li .icon {
-            flex-shrink: 0;
-            width: 18px;
-            height: 18px;
-            margin-top: 1px;
         }
 
         .check { color: var(--green); font-size: 16px; line-height: 1; }
         .cross  { color: #d1d5db;    font-size: 16px; line-height: 1; }
-        .soon   { color: var(--purple); font-size: 13px; font-weight: 600; }
 
-        .divider {
-            border: none;
-            border-top: 1px solid var(--border);
-            margin: 20px 0;
-        }
+        .divider { border: none; border-top: 1px solid #e8e8f0; margin: 20px 0; }
 
         .section-label {
             font-size: 11px;
             font-weight: 600;
-            color: var(--muted);
+            color: #7a7a8c;
             text-transform: uppercase;
             letter-spacing: 0.08em;
             margin-bottom: 12px;
@@ -485,26 +313,23 @@
         /* ── FAQ strip ── */
         .faq-strip {
             background: white;
-            border-top: 1px solid var(--border);
+            border-top: 1px solid #e8e8f0;
             padding: 60px 24px 80px;
         }
 
-        .faq-inner {
-            max-width: 720px;
-            margin: 0 auto;
-        }
+        .faq-inner { max-width: 720px; margin: 0 auto; }
 
         .faq-title {
             font-family: 'DM Serif Display', serif;
             font-size: 32px;
-            color: var(--dark);
+            color: #1a1a2e;
             margin-bottom: 40px;
             text-align: center;
         }
 
         .faq-item {
             padding: 20px 0;
-            border-bottom: 1px solid var(--border);
+            border-bottom: 1px solid #e8e8f0;
         }
 
         .faq-item:last-child { border-bottom: none; }
@@ -512,47 +337,30 @@
         .faq-q {
             font-size: 16px;
             font-weight: 600;
-            color: var(--dark);
+            color: #1a1a2e;
             margin-bottom: 8px;
         }
 
-        .faq-a {
-            font-size: 15px;
-            color: var(--muted);
-            font-weight: 400;
-            line-height: 1.6;
-        }
+        .faq-a { font-size: 15px; color: #7a7a8c; line-height: 1.6; }
+        .faq-a a { color: #667eea; }
 
         /* ── Footer ── */
-        .footer {
-            background: var(--dark);
+        .pricing-footer {
+            background: #1a1a2e;
             color: rgba(255,255,255,0.6);
             text-align: center;
             padding: 28px 24px;
             font-size: 14px;
         }
 
-        .footer a { color: rgba(255,255,255,0.7); text-decoration: none; }
-        .footer a:hover { color: white; }
+        .pricing-footer a { color: rgba(255,255,255,0.7); text-decoration: none; }
+        .pricing-footer a:hover { color: white; }
 
         /* ── Mobile ── */
         @media (max-width: 900px) {
             .pricing-grid { grid-template-columns: 1fr; max-width: 480px; margin: 0 auto; }
-            .hero h1 { font-size: 38px; }
-            .nav-links { display: none; }
-            .hamburger { display: flex; }
-            .header { top: 10px; width: calc(100% - 24px); padding: 10px 16px; }
+            .pricing-hero h1 { font-size: 38px; }
             .pricing-section { padding: 60px 16px 80px; }
-        }
-
-        /* Stagger card animation on load */
-        .card { opacity: 0; transform: translateY(24px); animation: fadeUp 0.5s ease forwards; }
-        .card:nth-child(1) { animation-delay: 0.1s; }
-        .card:nth-child(2) { animation-delay: 0.22s; }
-        .card:nth-child(3) { animation-delay: 0.34s; }
-
-        @keyframes fadeUp {
-            to { opacity: 1; transform: translateY(0); }
         }
     </style>
 </head>
@@ -560,29 +368,57 @@
 
 <header class="header" id="mainHeader">
     <div class="nav-container">
+
         <a href="/" class="logo">
             <div class="logo-icon">E</div>
             Exam Crop
         </a>
+
+        <!-- Desktop nav -->
         <nav class="nav-links">
-            <a href="/#how-it-works">How It Works</a>
-            <a href="/#features">Features</a>
-            <a href="/#upload">Try It Now</a>
+            <div class="nav-dropdown" id="curriculumDropdown">
+                <button class="nav-dropdown-trigger" id="curriculumTrigger">
+                    Curriculums
+                    <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                </button>
+                <div class="dropdown-menu">
+                    <a href="/igcse" class="dropdown-item">IGCSE</a>
+                    <a href="/sat" class="dropdown-item">SAT</a>
+                    <a href="/thanaweya" class="dropdown-item">الثانوية العامة</a>
+                </div>
+            </div>
             <a href="/pricing">Pricing</a>
+            <a href="#" class="nav-auth-btn" id="authNavBtn"
+               onclick="event.preventDefault(); showAuthModal('login')">Log In</a>
+            <div class="nav-user-menu" id="userNavMenu" style="display:none">
+                <a href="#" class="nav-logout-link" id="logoutBtn">Log out</a>
+            </div>
         </nav>
+
+        <!-- Hamburger (mobile only) -->
         <button class="hamburger" id="hamburger" aria-label="Menu">
             <span></span><span></span><span></span>
         </button>
+
     </div>
+
+    <!-- Mobile menu — outside nav-container, inside header -->
     <nav class="mobile-menu" id="mobileMenu">
-        <a href="/#how-it-works" class="mobile-nav-link">How It Works</a>
-        <a href="/#features" class="mobile-nav-link">Features</a>
-        <a href="/#upload" class="mobile-nav-link">Try It Now</a>
+        <span class="mobile-section-label">Curriculums</span>
+        <a href="/igcse" class="mobile-nav-link mobile-sub-link">IGCSE</a>
+        <a href="/sat" class="mobile-nav-link mobile-sub-link">SAT</a>
+        <a href="/thanaweya" class="mobile-nav-link mobile-sub-link">الثانوية العامة</a>
         <a href="/pricing" class="mobile-nav-link">Pricing</a>
+        <a href="#" class="mobile-nav-link mobile-auth-link" id="mobileAuthBtn">Log In</a>
+        <a href="#" class="mobile-logout-link" id="mobileLogoutBtn" style="display:none"
+           onclick="event.preventDefault(); Auth.logout(); window.location.href='/'">Log out</a>
     </nav>
+
 </header>
 
-<section class="hero">
+<section class="pricing-hero">
     <div class="hero-inner">
         <div class="beta-badge">
             <span class="beta-dot"></span>
@@ -606,8 +442,7 @@
                 <span class="price-period">/month</span>
             </div>
             <div class="price-note">✦ Unlimited splits during beta</div>
-            <a href="/#upload" class="btn-primary">Start Splitting — Free</a>
-
+            <a href="/#upload" class="pricing-btn-primary">Start Splitting — Free</a>
             <div class="section-label">What's included</div>
             <ul class="feature-list">
                 <li><span class="check">✓</span> Unlimited splits during beta</li>
@@ -635,13 +470,11 @@
                 <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><circle cx="4" cy="4" r="3" fill="#667eea"/></svg>
                 Coming soon
             </div>
-
             <div class="notify-form" id="basicNotifyForm">
                 <input type="email" class="notify-input" id="basicEmail" placeholder="your@email.com" autocomplete="email">
                 <button class="notify-btn" id="basicNotifyBtn" onclick="submitNotify('basic')">Notify me at launch</button>
             </div>
             <div class="notify-success" id="basicSuccess">✓ You're on the list — we'll email you first.</div>
-
             <div class="section-label">Everything in Free, plus</div>
             <ul class="feature-list">
                 <li><span class="check">✓</span> Unlimited splits</li>
@@ -668,13 +501,11 @@
                 <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><circle cx="4" cy="4" r="3" fill="#667eea"/></svg>
                 Coming soon
             </div>
-
             <div class="notify-form" id="proNotifyForm">
                 <input type="email" class="notify-input" id="proEmail" placeholder="your@email.com" autocomplete="email">
                 <button class="notify-btn" id="proNotifyBtn" onclick="submitNotify('pro')">Notify me at launch</button>
             </div>
             <div class="notify-success" id="proSuccess">✓ You're on the list — we'll email you first.</div>
-
             <div class="section-label">Everything in Basic, plus</div>
             <ul class="feature-list">
                 <li><span class="check">✓</span> Bulk upload — multiple files at once</li>
@@ -690,43 +521,61 @@
     </div>
 </section>
 
-<!-- FAQ -->
 <section class="faq-strip">
     <div class="faq-inner">
         <h2 class="faq-title">Questions</h2>
-
         <div class="faq-item">
             <div class="faq-q">Is ExamCrop really free right now?</div>
             <div class="faq-a">Yes — completely free during our beta phase with no limits. We're still refining the model and adding features. Paid plans are coming, but beta users will get an early-bird discount when they launch.</div>
         </div>
-
         <div class="faq-item">
             <div class="faq-q">What happens to my free account when paid plans launch?</div>
             <div class="faq-a">You'll automatically stay on the free tier. Nothing changes unless you choose to upgrade. If you signed up during beta, you'll get an exclusive discount on paid plans.</div>
         </div>
-
         <div class="faq-item">
             <div class="faq-q">When are Basic and Pro launching?</div>
             <div class="faq-a">We're targeting month two of the beta. Sign up for the notify list above and you'll be emailed the moment it goes live — with a discount for being early.</div>
         </div>
-
         <div class="faq-item">
             <div class="faq-q">Will there be annual pricing?</div>
             <div class="faq-a">Yes. Annual plans will be available at a discount — roughly equivalent to getting two months free. Details at launch.</div>
         </div>
-
         <div class="faq-item">
             <div class="faq-q">Is there a plan for schools or departments?</div>
-            <div class="faq-a">A school tier with team seats is on the roadmap. If you're interested in a department-level plan, reach out at support@examcrop.com and we'll sort something out.</div>
+            <div class="faq-a">A school tier with team seats is on the roadmap. If you're interested in a department-level plan, reach out at <a href="mailto:support@examcrop.com">support@examcrop.com</a> and we'll sort something out.</div>
         </div>
     </div>
 </section>
 
-<footer class="footer">
+<footer class="pricing-footer">
     <p>© 2025 Exam Crop · <a href="/">Home</a> · <a href="mailto:support@examcrop.com">support@examcrop.com</a></p>
 </footer>
 
-<script>
+<!-- Auth modal -->
+<div class="modal-overlay" id="authModalOverlay">
+    <div class="modal auth-modal">
+        <button class="modal-close-btn" id="authModalClose" aria-label="Close">×</button>
+        <div class="auth-logo">
+            <div class="logo-icon">E</div>
+        </div>
+        <h2 id="authModalTitle">Welcome back</h2>
+        <p class="auth-modal-subtitle" id="authModalSubtitle">Log in to your question bank</p>
+        <form id="authForm" autocomplete="on">
+            <div id="authNameRow" style="display:none">
+                <input type="text" id="authNameInput" placeholder="Full Name" autocomplete="name">
+            </div>
+            <input type="email" id="authEmailInput" placeholder="name@email.com" autocomplete="email" required>
+            <input type="password" id="authPasswordInput" placeholder="Password (min 8 characters)" autocomplete="current-password" required minlength="8">
+            <div class="auth-error" id="authErrorMsg" style="display:none"></div>
+            <button type="submit" id="authSubmitBtn">Log In</button>
+        </form>
+        <p class="auth-switch" id="authSwitchLink">
+            Don't have an account? <a href="#" id="authSwitchBtn">Sign up free</a>
+        </p>
+    </div>
+</div>
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
     // Navbar scroll
     const header = document.getElementById('mainHeader');
     window.addEventListener('scroll', () => {
@@ -734,7 +583,7 @@
     });
 
     // Hamburger
-    const hamburger = document.getElementById('hamburger');
+    const hamburger  = document.getElementById('hamburger');
     const mobileMenu = document.getElementById('mobileMenu');
     hamburger.addEventListener('click', () => {
         hamburger.classList.toggle('open');
@@ -745,7 +594,17 @@
         mobileMenu.classList.remove('open');
     }));
 
-    // Notify form submission
+    // Curriculum dropdown
+    const curriculumDropdown = document.getElementById('curriculumDropdown');
+    const curriculumTrigger  = document.getElementById('curriculumTrigger');
+    curriculumTrigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        curriculumDropdown.classList.toggle('open');
+    });
+    document.addEventListener('click', () => curriculumDropdown.classList.remove('open'));
+    curriculumDropdown.querySelector('.dropdown-menu').addEventListener('click', (e) => e.stopPropagation());
+
+    // Notify form
     const API_BASE = (() => {
         const h = window.location.hostname;
         if (h === 'localhost' || h === '127.0.0.1') return 'http://localhost:8000';
@@ -754,10 +613,10 @@
     })();
 
     async function submitNotify(tier) {
-        const emailEl  = document.getElementById(`${tier}Email`);
-        const btnEl    = document.getElementById(`${tier}NotifyBtn`);
-        const successEl= document.getElementById(`${tier}Success`);
-        const formEl   = document.getElementById(`${tier}NotifyForm`);
+        const emailEl   = document.getElementById(`${tier}Email`);
+        const btnEl     = document.getElementById(`${tier}NotifyBtn`);
+        const successEl = document.getElementById(`${tier}Success`);
+        const formEl    = document.getElementById(`${tier}NotifyForm`);
 
         const email = emailEl.value.trim();
         if (!email || !email.includes('@')) {
@@ -767,7 +626,7 @@
             return;
         }
 
-        btnEl.disabled = true;
+        btnEl.disabled    = true;
         btnEl.textContent = 'Saving...';
 
         try {
@@ -785,9 +644,11 @@
             console.error('Notify error:', e);
         }
 
-        formEl.style.display = 'none';
+        formEl.style.display    = 'none';
         successEl.style.display = 'block';
     }
 </script>
+<script src="auth.js"></script>
+
 </body>
 </html>

@@ -41,12 +41,17 @@
 </head>
 <body>
 
+
 <header class="header" id="mainHeader">
     <div class="nav-container">
-        <a href="/" class="logo"><div class="logo-icon">E</div>Exam Crop</a>
+
+        <a href="/" class="logo">
+            <div class="logo-icon">E</div>
+            Exam Crop
+        </a>
+
+        <!-- Desktop nav -->
         <nav class="nav-links">
-            <a href="/">Home</a>
-            <a href="/#how-it-works">How It Works</a>
             <div class="nav-dropdown" id="curriculumDropdown">
                 <button class="nav-dropdown-trigger" id="curriculumTrigger">
                     Curriculums
@@ -61,18 +66,32 @@
                 </div>
             </div>
             <a href="/pricing">Pricing</a>
+            <a href="#" class="nav-auth-btn" id="authNavBtn"
+               onclick="event.preventDefault(); showAuthModal('login')">Log In</a>
+            <div class="nav-user-menu" id="userNavMenu" style="display:none">
+                <a href="#" class="nav-logout-link" id="logoutBtn">Log out</a>
+            </div>
         </nav>
-        <button class="hamburger" id="hamburger"><span></span><span></span><span></span></button>
+
+        <!-- Hamburger (mobile only) -->
+        <button class="hamburger" id="hamburger" aria-label="Menu">
+            <span></span><span></span><span></span>
+        </button>
+
     </div>
+
+    <!-- Mobile menu — outside nav-container, inside header -->
     <nav class="mobile-menu" id="mobileMenu">
-        <a href="/" class="mobile-nav-link">Home</a>
-        <a href="/#how-it-works" class="mobile-nav-link">How It Works</a>
         <span class="mobile-section-label">Curriculums</span>
         <a href="/igcse" class="mobile-nav-link mobile-sub-link">IGCSE</a>
         <a href="/sat" class="mobile-nav-link mobile-sub-link">SAT</a>
         <a href="/thanaweya" class="mobile-nav-link mobile-sub-link">الثانوية العامة</a>
         <a href="/pricing" class="mobile-nav-link">Pricing</a>
+        <a href="#" class="mobile-nav-link mobile-auth-link" id="mobileAuthBtn">Log In</a>
+        <a href="#" class="mobile-logout-link" id="mobileLogoutBtn" style="display:none"
+           onclick="event.preventDefault(); Auth.logout(); window.location.href='/'">Log out</a>
     </nav>
+
 </header>
 
 <section class="hero">
@@ -305,6 +324,57 @@ renderAfter();
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="curriculum-script.js"></script>
+<script src="auth.js"></script>
+
+    <div class="modal-overlay" id="authModalOverlay">
+        <div class="modal auth-modal">
+            <button class="modal-close-btn" id="authModalClose" aria-label="Close">×</button>
+
+            <div class="auth-logo">
+                <div class="logo-icon">E</div>
+            </div>
+
+            <h2 id="authModalTitle">Welcome back</h2>
+            <p class="auth-modal-subtitle" id="authModalSubtitle">Log in to your question bank</p>
+
+            <form id="authForm" autocomplete="on">
+                <!-- Name — only shown during signup -->
+                <div id="authNameRow" style="display:none">
+                    <input
+                        type="text"
+                        id="authNameInput"
+                        placeholder="Full Name"
+                        autocomplete="name"
+                    >
+                </div>
+
+                <input
+                    type="email"
+                    id="authEmailInput"
+                    placeholder="name@email.com"
+                    autocomplete="email"
+                    required
+                >
+
+                <input
+                    type="password"
+                    id="authPasswordInput"
+                    placeholder="Password (min 8 characters)"
+                    autocomplete="current-password"
+                    required
+                    minlength="8"
+                >
+
+                <div class="auth-error" id="authErrorMsg" style="display:none"></div>
+
+                <button type="submit" id="authSubmitBtn">Log In</button>
+            </form>
+
+            <p class="auth-switch" id="authSwitchLink">
+                Don't have an account? <a href="#" id="authSwitchBtn">Sign up free</a>
+            </p>
+        </div>
+    </div>
 </body>
 </html>
 
