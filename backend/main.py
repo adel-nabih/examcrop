@@ -39,7 +39,8 @@ load_dotenv()
 IS_RAILWAY = os.environ.get("RAILWAY_ENVIRONMENT_NAME") is not None
 
 if IS_RAILWAY:
-    POCKETBASE_URL = "http://pocketbase.railway.internal:8080"
+    #quick test
+    POCKETBASE_URL = "https://pocketbase-production-4854.up.railway.app"
 else:
     POCKETBASE_URL = "https://pocketbase-production-4854.up.railway.app"
 
