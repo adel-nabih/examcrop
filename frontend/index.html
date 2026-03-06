@@ -66,8 +66,7 @@
                 </div>
             </div>
             <a href="/pricing">Pricing</a>
-            <a href="#" class="nav-auth-btn" id="authNavBtn"
-               onclick="event.preventDefault(); showAuthModal('login')">Log In</a>
+            <a href="#" class="nav-auth-btn" id="authNavBtn">Log In</a>
             <div class="nav-user-menu" id="userNavMenu" style="display:none">
                 <a href="#" class="nav-logout-link" id="logoutBtn">Log out</a>
             </div>
@@ -276,7 +275,7 @@
             <div class="footer-section">
                 <h4>Support</h4>
                 <p>Have questions? We're here to help.</p>
-                <a href="mailto:support@examcrop.com">support@examcrop.com</a>
+                <a href="/cdn-cgi/l/email-protection#c2b1b7b2b2adb0b682a7baa3afa1b0adb2eca1adaf"><span class="__cf_email__" data-cfemail="45363035352a373105203d242826372a356b262a28">[email&#160;protected]</span></a>
             </div>
         </div>
         <div class="footer-bottom">
@@ -326,13 +325,14 @@
                 <div class="viewer-counter" id="viewerCounter">Question 1 of 1</div>
                 <div class="viewer-actions">
                     <button class="viewer-btn viewer-btn-secondary" id="downloadCurrent" style="display:none">Download This</button>
+                    <button class="viewer-btn viewer-btn-save" id="saveBankBtn" style="display:none">💾 Save to Bank</button>
                     <button class="viewer-btn viewer-btn-primary" id="downloadAll">Download All (PDF)</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <script>
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
         // Navbar scroll
         const mainHeader = document.getElementById('mainHeader');
         window.addEventListener('scroll', () => {

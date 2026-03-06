@@ -48,6 +48,7 @@ const viewerPrev = document.getElementById('viewerPrev');
 const viewerNext = document.getElementById('viewerNext');
 const downloadCurrent = document.getElementById('downloadCurrent');
 const downloadAll = document.getElementById('downloadAll');
+const saveBankBtn = document.getElementById('saveBankBtn');
 
 // Page selector
 const pageSelector      = document.getElementById('pageSelector');
@@ -69,6 +70,7 @@ let processedQuestions = [];  // now holds one entry per page of the combined PD
 let currentQuestionIndex = 0;
 let currentViewMode = 'results';
 let isDemo = false;
+let _bankSaved = false;
 
 // ── Page selector helpers ────────────────────────────────────────────────
 
@@ -118,11 +120,12 @@ function parsePageRange(str, totalPages) {
 // ── Smooth scroll
 document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     anchor.addEventListener('click', function (e) {
+        const href = this.getAttribute('href');
+        if (!href || href === '#' || !href.startsWith('#')) return;
+        const target = document.querySelector(href);
+        if (!target) return;
         e.preventDefault();
-        const target = document.querySelector(this.getAttribute('href'));
-        if (target) {
-            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 });
 
@@ -201,6 +204,7 @@ async function handleFile(file) {
     processedQuestions = [];
     pendingDownload = null;
     currentQuestionIndex = 0;
+    _bankSaved = false;
 
     // Reset page selector
     pageSelectorMode = 'all';
@@ -346,6 +350,7 @@ function showViewer(mode = 'results') {
         currentQuestionIndex = 0;
         updateResultsViewerUI();
     }
+    updateSaveBankBtn();
 }
 
 function hideViewer() {
@@ -696,6 +701,60 @@ downloadAll.addEventListener('click', () => {
         showEmailModal();
     }
 });
+
+// ── Save to Bank ──────────────────────────────────────────────────────────────
+
+function updateSaveBankBtn() {
+    if (!saveBankBtn) return;
+    const loggedIn  = window.Auth && window.Auth.isLoggedIn();
+    const hasResult = currentViewMode === 'results' && processedQuestions.length > 0 && window._lastUploadId;
+    saveBankBtn.style.display = (loggedIn && hasResult) ? '' : 'none';
+}
+
+if (saveBankBtn) {
+    saveBankBtn.addEventListener('click', async () => {
+        const token    = window.Auth && window.Auth.getToken();
+        const uploadId = window._lastUploadId;
+        if (!token || !uploadId || _bankSaved) return;
+
+        saveBankBtn.disabled    = true;
+        saveBankBtn.textContent = 'Saving...';
+
+        try {
+            const res = await fetch(`${API_BASE}/api/save-questions`, {
+                method:  'POST',
+                headers: {
+                    'Content-Type':  'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({ upload_id: uploadId }),
+            });
+
+            if (res.status === 409) {
+                _bankSaved = true;
+                saveBankBtn.textContent = '✓ Already in Bank';
+                saveBankBtn.classList.add('saved');
+                saveBankBtn.disabled = false;
+                return;
+            }
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || 'Save failed');
+            }
+
+            _bankSaved = true;
+            saveBankBtn.textContent = '✓ Saved to Bank';
+            saveBankBtn.classList.add('saved');
+            saveBankBtn.disabled = false;
+
+        } catch (err) {
+            console.error('Save to Bank error:', err);
+            saveBankBtn.textContent = '💾 Save to Bank';
+            saveBankBtn.disabled    = false;
+        }
+    });
+}
 
 // Split Button Handler
 splitBtn.addEventListener('click', async () => {

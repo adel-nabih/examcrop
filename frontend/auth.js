@@ -140,6 +140,11 @@ function _onAuthChange(user) {
         if (userMenu) userMenu.style.display = 'none';
     }
 
+    // ── Page-specific callback (e.g. bank.html) ──
+    if (typeof window._bankAuthCallback === 'function') {
+        window._bankAuthCallback(user);
+    }
+
     // ── Mobile menu auth link ──
     const mobileAuthBtn    = document.getElementById('mobileAuthBtn');
     const mobileLogoutLink = document.getElementById('mobileLogoutBtn');

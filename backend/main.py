@@ -3,8 +3,9 @@ FastAPI Backend for Worksheet Splitter - OPTIMIZED
 YOLOv26 Custom Model with Parallel Processing & Caching
 """
 
-from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Query
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import tempfile
 import shutil
@@ -687,6 +688,288 @@ async def collect_feedback(request: dict):
         return {"status": "error", "message": str(e)}
 
 
+
+# ── Auth dependency ──────────────────────────────────────────────────────────
+
+security = HTTPBearer()
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Validate PocketBase JWT token and return user record."""
+    token = credentials.credentials
+    print(f"[AUTH] Token received (first 20 chars): {token[:20] if token else 'NONE'}...")
+    try:
+        resp = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: __import__('requests').post(
+                f"{POCKETBASE_URL}/api/collections/users/auth-refresh",
+                headers={"Authorization": token},
+                timeout=5,
+            )
+        )
+        print(f"[AUTH] PocketBase response status: {resp.status_code}")
+        if resp.status_code != 200:
+            print(f"[AUTH] PocketBase rejected token: {resp.text[:200]}")
+            raise HTTPException(status_code=401, detail="Invalid or expired token.")
+        data = resp.json()
+        user_id = data["record"]["id"]
+        user_email = data["record"]["email"]
+        print(f"[AUTH] Token valid for user: {user_email} ({user_id})")
+        return {"id": user_id, "email": user_email, "token": token}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[AUTH] Exception in get_current_user: {e}")
+        raise HTTPException(status_code=401, detail=f"Auth error: {str(e)}")
+
+
+# ── R2 signed URL ─────────────────────────────────────────────────────────────
+
+@app.get("/api/r2-url")
+async def get_r2_signed_url(
+    key: str = Query(..., description="R2 object key e.g. uploads/upload_id/output/question_01.pdf"),
+    user: dict = Depends(get_current_user),
+):
+    """Generate a short-lived presigned URL for an R2 object."""
+    if not r2_client:
+        raise HTTPException(status_code=503, detail="R2 not available.")
+
+    # Security: only allow access to the user's own questions via questions table
+    # Key must start with "uploads/" to prevent path traversal
+    if not key.startswith("uploads/"):
+        raise HTTPException(status_code=400, detail="Invalid key.")
+
+    try:
+        url = r2_client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": R2_BUCKET_NAME, "Key": key},
+            ExpiresIn=3600,  # 1 hour
+        )
+        return {"url": url, "expires_in": 3600}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not generate URL: {str(e)}")
+
+
+# ── Thumbnail ─────────────────────────────────────────────────────────────────
+
+@app.get("/api/thumbnail")
+async def get_thumbnail(
+    key: str = Query(..., description="R2 key of the question PDF e.g. uploads/.../output/question_01.pdf"),
+    user: dict = Depends(get_current_user),
+):
+    """
+    Return a small JPEG thumbnail for a question PDF.
+    Checks R2 for a cached thumbnail first; generates and uploads it if missing.
+    Thumbnail key mirrors the PDF key but under thumbnails/ and with .jpg extension.
+    e.g. uploads/{id}/output/question_01.pdf -> uploads/{id}/thumbnails/question_01.jpg
+    """
+    if not r2_client:
+        raise HTTPException(status_code=503, detail="R2 not available.")
+    if not key.startswith("uploads/"):
+        raise HTTPException(status_code=400, detail="Invalid key.")
+
+    # Derive thumbnail key
+    parts = key.split("/")
+    # parts: ['uploads', upload_id, 'output', 'question_01.pdf']
+    pdf_filename = parts[-1]
+    jpg_filename = Path(pdf_filename).stem + ".jpg"
+    thumb_key = "/".join(parts[:-2]) + f"/thumbnails/{jpg_filename}"
+
+    # Try cached thumbnail first
+    try:
+        obj = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: r2_client.get_object(Bucket=R2_BUCKET_NAME, Key=thumb_key)
+        )
+        img_bytes = obj["Body"].read()
+        return StreamingResponse(io.BytesIO(img_bytes), media_type="image/jpeg",
+                                 headers={"Cache-Control": "public, max-age=86400"})
+    except r2_client.exceptions.NoSuchKey:
+        pass
+    except Exception:
+        pass  # cache miss for any reason — generate it
+
+    # Generate thumbnail from the PDF
+    try:
+        # Fetch the PDF from R2
+        pdf_obj = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: r2_client.get_object(Bucket=R2_BUCKET_NAME, Key=key)
+        )
+        pdf_bytes = pdf_obj["Body"].read()
+
+        # Render page 1 at low res with fitz
+        doc  = fitz.open(stream=pdf_bytes, filetype="pdf")
+        page = doc[0]
+        # mat=0.4 zoom → small canvas, enough for a thumbnail
+        mat  = fitz.Matrix(0.4, 0.4)
+        pix  = page.get_pixmap(matrix=mat, alpha=False)
+        img_bytes = pix.tobytes("jpeg", jpg_quality=75)
+        doc.close()
+
+        # Upload to R2 asynchronously (don't block the response)
+        def _upload_thumb():
+            try:
+                r2_client.put_object(
+                    Bucket=R2_BUCKET_NAME,
+                    Key=thumb_key,
+                    Body=img_bytes,
+                    ContentType="image/jpeg",
+                )
+                print(f"✅ Thumbnail cached: {thumb_key}")
+            except Exception as e:
+                print(f"⚠️ Could not cache thumbnail: {e}")
+
+        threading.Thread(target=_upload_thumb, daemon=True).start()
+
+        return StreamingResponse(io.BytesIO(img_bytes), media_type="image/jpeg",
+                                 headers={"Cache-Control": "public, max-age=86400"})
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not generate thumbnail: {str(e)}")
+
+
+
+
+@app.post("/api/save-questions")
+async def save_questions(
+    request: dict,
+    user: dict = Depends(get_current_user),
+):
+    """
+    Save split questions to the user's question bank.
+    Reads metadata.json from R2 to get question count, then creates
+    one questions record per question in PocketBase.
+    """
+    upload_id   = request.get("upload_id", "").strip()
+    source_pdf  = request.get("source_pdf", "")
+    subject     = request.get("subject", "")
+    curriculum  = request.get("curriculum", "")
+
+    if not upload_id:
+        raise HTTPException(status_code=400, detail="upload_id required.")
+
+    # Fetch metadata from R2 to get accurate question count
+    metadata_key = f"uploads/{upload_id}/metadata.json"
+    try:
+        obj = r2_client.get_object(Bucket=R2_BUCKET_NAME, Key=metadata_key)
+        metadata = json.loads(obj["Body"].read())
+        questions_count = metadata.get("questions_detected", 0)
+        filename = metadata.get("filename", source_pdf)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Upload not found or metadata missing: {str(e)}")
+
+    if questions_count == 0:
+        raise HTTPException(status_code=400, detail="No questions found for this upload.")
+
+    # Check if already saved (idempotent)
+    try:
+        pb.admins.auth_with_password(POCKETBASE_EMAIL, POCKETBASE_PASSWORD)
+        existing = pb.collection("questions").get_list(1, 1, {
+            "filter": f'upload_id = "{upload_id}" && user = "{user["id"]}"',
+        })
+        if existing.items:
+            return {"status": "already_saved", "count": len(existing.items)}
+    except Exception:
+        pass
+
+    # Create one record per question
+    created = []
+    for i in range(1, questions_count + 1):
+        r2_key = f"uploads/{upload_id}/output/question_{i:02d}.pdf"
+        try:
+            record = pb.collection("questions").create({
+                "user":       user["id"],
+                "upload_id":  upload_id,
+                "r2_key":     r2_key,
+                "source_pdf": filename,
+                "subject":    subject,
+                "curriculum": curriculum,
+                "ai_tagged":  False,
+                "q_number":   i,
+            })
+            created.append(record.id)
+        except Exception as e:
+            print(f"Could not save question {i}: {e}")
+
+    return {
+        "status":  "saved",
+        "count":   len(created),
+        "ids":     created,
+    }
+
+
+# ── Get user's questions ──────────────────────────────────────────────────────
+
+@app.get("/api/my-questions")
+async def get_my_questions(
+    user: dict = Depends(get_current_user),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(24, ge=1, le=100),
+    subject: str = Query(None),
+    curriculum: str = Query(None),
+    difficulty: str = Query(None),
+    q_type: str = Query(None),
+):
+    """Return paginated questions for the logged-in user."""
+    try:
+        pb.admins.auth_with_password(POCKETBASE_EMAIL, POCKETBASE_PASSWORD)
+
+        filters = [f'user = "{user["id"]}"']
+        if subject:    filters.append(f'subject = "{subject}"')
+        if curriculum: filters.append(f'curriculum = "{curriculum}"')
+        if difficulty: filters.append(f'difficulty = "{difficulty}"')
+        if q_type:     filters.append(f'q_type = "{q_type}"')
+
+        result = pb.collection("questions").get_list(page, per_page, {
+            "filter":  " && ".join(filters),
+            "sort":    "-created",
+        })
+
+        questions_out = []
+        for r in result.items:
+            q = vars(r) if not isinstance(r, dict) else r
+            # Derive thumbnail key so the frontend can request it directly
+            r2_key = q.get("r2_key", "")
+            if r2_key:
+                parts = r2_key.split("/")
+                jpg_name = Path(parts[-1]).stem + ".jpg"
+                q["thumbnail_key"] = "/".join(parts[:-2]) + f"/thumbnails/{jpg_name}"
+            else:
+                q["thumbnail_key"] = None
+            questions_out.append(q)
+
+        return {
+            "questions":   questions_out,
+            "total":       result.total_items,
+            "page":        page,
+            "total_pages": result.total_pages,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Delete a question ─────────────────────────────────────────────────────────
+
+@app.delete("/api/questions/{question_id}")
+async def delete_question(
+    question_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """Delete a question from the bank (user must own it)."""
+    try:
+        pb.admins.auth_with_password(POCKETBASE_EMAIL, POCKETBASE_PASSWORD)
+        record = pb.collection("questions").get_one(question_id)
+        rec_dict = vars(record) if not isinstance(record, dict) else record
+        if rec_dict.get("user") != user["id"]:
+            raise HTTPException(status_code=403, detail="Not your question.")
+        pb.collection("questions").delete(question_id)
+        return {"status": "deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Clean URL mappings — /pricing serves pricing.html, /igcse serves igcse.html etc.
 CLEAN_URL_MAP = {
     "pricing":   "pricing.html",
@@ -694,6 +977,7 @@ CLEAN_URL_MAP = {
     "ib":        "ib.html",
     "sat":       "sat.html",
     "thanaweya": "thanaweya.html",
+    "bank":      "bank.html",
 }
 
 @app.get("/")
