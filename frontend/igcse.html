@@ -237,25 +237,40 @@ renderAfter();
         <div class="msg msg-error" id="errorMsg"></div>
         <div class="msg msg-success" id="successMsg"></div>
 
-        <div class="mini-viewer" id="miniViewer">
-            <div class="mini-viewer-header">
-                <span class="mini-viewer-title" id="miniViewerTitle">Questions Preview</span>
-                <button class="mini-viewer-close" id="miniViewerClose">×</button>
+    </div>
+</section>
+
+<div class="viewer-overlay" id="viewerOverlay">
+    <div class="viewer-container">
+        <div class="viewer-header">
+            <div class="viewer-title" id="viewerTitle">Questions Preview</div>
+            <button class="viewer-close" id="viewerClose">×</button>
+        </div>
+        <div class="viewer-content" id="viewerContent">
+            <img class="viewer-image" id="viewerImage" alt="Question" />
+            <div class="viewer-nav">
+                <button id="viewerPrev">‹</button>
+                <button id="viewerNext">›</button>
             </div>
-            <div class="mini-viewer-body">
-                <img class="mini-viewer-img" id="miniViewerImg" alt="Question">
-                <div class="mini-viewer-nav">
-                    <span class="mini-viewer-counter" id="miniViewerCounter"></span>
-                    <div class="mini-viewer-btns">
-                        <button class="mini-nav-btn" id="miniPrev">‹</button>
-                        <button class="mini-nav-btn" id="miniNext">›</button>
-                    </div>
-                </div>
-                <button class="download-btn" id="downloadBtn">Download All Questions (PDF)</button>
+            <button class="viewer-trash" id="viewerTrash" title="Remove this question">
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"/>
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                    <path d="M10 11v6"/><path d="M14 11v6"/>
+                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                </svg>
+            </button>
+        </div>
+        <div class="viewer-footer">
+            <div class="viewer-counter" id="viewerCounter">Question 1 of 1</div>
+            <div class="viewer-actions">
+                <button class="viewer-btn viewer-btn-secondary" id="downloadCurrent" style="display:none">Download This</button>
+                <button class="viewer-btn viewer-btn-save" id="saveBankBtn" style="display:none">💾 Save to Bank</button>
+                <button class="viewer-btn viewer-btn-primary" id="downloadAll">Download All (PDF)</button>
             </div>
         </div>
     </div>
-</section>
+</div>
 
 <div class="modal-overlay" id="modalOverlay">
     <div class="modal">
@@ -322,10 +337,10 @@ renderAfter();
 </section>
 
 <footer class="footer">
-    <p>© 2025 Exam Crop · <a href="/">Home</a> · <a href="/pricing">Pricing</a> · <a href="mailto:support@examcrop.com">support@examcrop.com</a></p>
+    <p>© 2025 Exam Crop · <a href="/">Home</a> · <a href="/pricing">Pricing</a> · <a href="/cdn-cgi/l/email-protection#e695939696899492a6839e878b85948996c885898b"><span class="__cf_email__" data-cfemail="8bf8fefbfbe4f9ffcbeef3eae6e8f9e4fba5e8e4e6">[email&#160;protected]</span></a></p>
 </footer>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="curriculum-script.js"></script>
 <script src="auth.js"></script>
 

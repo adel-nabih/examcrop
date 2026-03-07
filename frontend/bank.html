@@ -434,6 +434,70 @@
             .question-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
             .bank-title { font-size: 22px; }
         }
+
+        /* ── Confirm modal ── */
+        .confirm-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            backdrop-filter: blur(4px);
+        }
+        .confirm-overlay.show { display: flex; }
+        .confirm-box {
+            background: #fff;
+            border-radius: 16px;
+            padding: 28px 28px 22px;
+            max-width: 340px;
+            width: 100%;
+            box-shadow: 0 16px 60px rgba(0,0,0,0.2);
+            text-align: center;
+            position: relative;
+        }
+        .confirm-icon { font-size: 32px; margin-bottom: 12px; }
+        .confirm-title {
+            font-family: 'DM Serif Display', serif;
+            font-size: 18px;
+            color: var(--text);
+            margin-bottom: 8px;
+        }
+        .confirm-msg {
+            font-size: 14px;
+            color: var(--muted);
+            line-height: 1.5;
+            margin-bottom: 22px;
+        }
+        .confirm-actions { display: flex; gap: 10px; justify-content: center; }
+        .confirm-btn-cancel {
+            padding: 9px 20px;
+            background: none;
+            border: 1.5px solid var(--border);
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: 'DM Sans', sans-serif;
+            color: var(--muted);
+            cursor: pointer;
+            transition: border-color 0.15s, color 0.15s;
+        }
+        .confirm-btn-cancel:hover { border-color: var(--text); color: var(--text); }
+        .confirm-btn-delete {
+            padding: 9px 20px;
+            background: #ef4444;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: 'DM Sans', sans-serif;
+            color: #fff;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .confirm-btn-delete:hover { background: #dc2626; }
     </style>
 </head>
 <body>
@@ -572,6 +636,19 @@
     </div>
 </div>
 
+
+<div class="confirm-overlay" id="confirmOverlay">
+    <div class="confirm-box">
+        <button class="pdf-modal-close" id="confirmClose" style="position:absolute;top:12px;right:14px;">×</button>
+        <div class="confirm-icon">🗑️</div>
+        <div class="confirm-title">Remove question?</div>
+        <p class="confirm-msg">This will remove the question from your bank. The original file stays in your splits.</p>
+        <div class="confirm-actions">
+            <button class="confirm-btn-cancel" id="confirmCancel">Cancel</button>
+            <button class="confirm-btn-delete" id="confirmDelete">Remove</button>
+        </div>
+    </div>
+</div>
 <script>
 const API_BASE = (() => {
     const h = window.location.hostname;
@@ -726,32 +803,67 @@ function renderGrid(questions) {
     });
 }
 
-// ── PDF preview for card — server-side thumbnail ──────────────────────────────
-function loadCardPreview(r2Key, thumbnailKey, questionId) {
+// ── Thumbnail queue — max 4 concurrent PDF.js renders ────────────────────────
+const _thumbQueue   = [];
+let   _thumbActive  = 0;
+const _thumbMax     = 4;
+
+function loadCardPreview(r2Key, _unused, questionId) {
+    _thumbQueue.push({ r2Key, questionId });
+    _drainThumbQueue();
+}
+
+function _drainThumbQueue() {
+    while (_thumbActive < _thumbMax && _thumbQueue.length > 0) {
+        const job = _thumbQueue.shift();
+        _thumbActive++;
+        _renderThumb(job.r2Key, job.questionId).finally(() => {
+            _thumbActive--;
+            _drainThumbQueue();
+        });
+    }
+}
+
+async function _renderThumb(r2Key, questionId) {
     const container = document.getElementById(`preview-${questionId}`);
     if (!container) return;
 
-    const token = Auth.getToken();
-    const src   = `${API_BASE}/api/thumbnail?key=${encodeURIComponent(r2Key)}`;
+    try {
+        // Reuse signed URL cache — no extra request if modal already fetched it
+        const url = await getSignedUrl(r2Key);
 
-    const img = document.createElement('img');
-    img.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;';
-    img.alt = 'Question preview';
+        const pdf  = await pdfjsLib.getDocument({ url, disableRange: false }).promise;
+        const page = await pdf.getPage(1);
 
-    // Auth header required — fetch as blob then set as object URL
-    fetch(src, { headers: { 'Authorization': `Bearer ${token}` } })
-        .then(res => {
-            if (!res.ok) throw new Error('thumbnail fetch failed');
-            return res.blob();
-        })
-        .then(blob => {
-            img.src = URL.createObjectURL(blob);
+        // Render at card's actual CSS pixel width × devicePixelRatio for sharpness
+        const cardW  = container.offsetWidth  || 200;
+        const cardH  = container.offsetHeight || Math.round(cardW * 4 / 3);
+        const dpr    = window.devicePixelRatio || 1;
+
+        // Scale to fill card width, cap DPR at 2 to save memory
+        const effectiveDpr = Math.min(dpr, 2);
+        const nativeVp     = page.getViewport({ scale: 1 });
+        const scale        = (cardW * effectiveDpr) / nativeVp.width;
+        const viewport     = page.getViewport({ scale });
+
+        const canvas        = document.createElement('canvas');
+        canvas.width        = viewport.width;
+        canvas.height       = viewport.height;
+        canvas.style.width  = '100%';
+        canvas.style.height = '100%';
+        canvas.style.objectFit = 'contain';
+        canvas.style.display   = 'block';
+
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        pdf.destroy();
+
+        if (container) {
             container.innerHTML = '';
-            container.appendChild(img);
-        })
-        .catch(() => {
-            if (container) container.innerHTML = `<span style="font-size:28px;opacity:0.3">📄</span>`;
-        });
+            container.appendChild(canvas);
+        }
+    } catch {
+        if (container) container.innerHTML = `<span style="font-size:28px;opacity:0.3">📄</span>`;
+    }
 }
 
 // ── PDF modal ─────────────────────────────────────────────────────────────────
@@ -800,9 +912,46 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closePdfModal();
 });
 
+// ── Custom confirm modal ──────────────────────────────────────────────────────
+let _confirmResolve = null;
+
+function _showConfirm() {
+    return new Promise(resolve => {
+        _confirmResolve = resolve;
+        document.getElementById('confirmOverlay').classList.add('show');
+    });
+}
+
+function _hideConfirm() {
+    document.getElementById('confirmOverlay').classList.remove('show');
+}
+
+document.getElementById('confirmCancel').addEventListener('click', () => {
+    _hideConfirm();
+    const r = _confirmResolve; _confirmResolve = null; if (r) r(false);
+});
+
+document.getElementById('confirmClose').addEventListener('click', () => {
+    _hideConfirm();
+    const r = _confirmResolve; _confirmResolve = null; if (r) r(false);
+});
+
+document.getElementById('confirmDelete').addEventListener('click', () => {
+    _hideConfirm();
+    const r = _confirmResolve; _confirmResolve = null; if (r) r(true);
+});
+
+document.getElementById('confirmOverlay').addEventListener('click', (e) => {
+    if (e.target.id === 'confirmOverlay') {
+        _hideConfirm();
+        const r = _confirmResolve; _confirmResolve = null; if (r) r(false);
+    }
+});
+
 async function deleteQuestion(e, questionId) {
     e.stopPropagation();
-    if (!confirm('Remove this question from your bank?')) return;
+    const confirmed = await _showConfirm();
+    if (!confirmed) return;
     try {
         const token = Auth.getToken();
         const res   = await fetch(`${API_BASE}/api/questions/${questionId}`, {

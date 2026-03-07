@@ -105,8 +105,9 @@ async function extractPages(zipBlob) {
 
 // ── Upload tool ──────────────────────────────────────────────────────────────
 let selectedFile = null, pendingBlob = null, pendingFilename = null;
-let questions = [], qIdx = 0;
+let processedQuestions = [], currentQuestionIndex = 0;
 let pageSelectorMode = 'all', originalPageCount = 0;
+let _bankSaved = false;
 
 const uploadArea        = document.getElementById('uploadArea');
 const fileInput         = document.getElementById('fileInput');
@@ -119,12 +120,16 @@ const progressBar       = document.getElementById('progressBar');
 const progressText      = document.getElementById('progressText');
 const errorMsg          = document.getElementById('errorMsg');
 const successMsg        = document.getElementById('successMsg');
-const miniViewer        = document.getElementById('miniViewer');
-const miniViewerImg     = document.getElementById('miniViewerImg');
-const miniCounter       = document.getElementById('miniViewerCounter');
-const miniPrev          = document.getElementById('miniPrev');
-const miniNext          = document.getElementById('miniNext');
-const downloadBtn       = document.getElementById('downloadBtn');
+const viewerOverlay     = document.getElementById('viewerOverlay');
+const viewerClose       = document.getElementById('viewerClose');
+const viewerImage       = document.getElementById('viewerImage');
+const viewerTitle       = document.getElementById('viewerTitle');
+const viewerCounter     = document.getElementById('viewerCounter');
+const viewerPrev        = document.getElementById('viewerPrev');
+const viewerNext        = document.getElementById('viewerNext');
+const viewerTrash       = document.getElementById('viewerTrash');
+const downloadAll       = document.getElementById('downloadAll');
+const saveBankBtn       = document.getElementById('saveBankBtn');
 const modalOverlay      = document.getElementById('modalOverlay');
 const emailForm         = document.getElementById('emailForm');
 const emailInput        = document.getElementById('emailInput');
@@ -151,7 +156,6 @@ async function handleFile(file) {
     fileSizeEl.textContent = formatSize(file.size);
     fileInfo.classList.add('show');
     splitBtn.classList.add('show');
-    miniViewer.classList.remove('show');
     errorMsg.classList.remove('show');
     successMsg.classList.remove('show');
     pageSelector.classList.remove('show');
@@ -161,6 +165,8 @@ async function handleFile(file) {
     pageRangeInputWrap.classList.remove('show');
     pageRangeInput.value = '';
     pageRangeError.classList.remove('show');
+    processedQuestions = [];
+    _bankSaved = false;
 
     if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
         try {
@@ -213,8 +219,8 @@ splitBtn.addEventListener('click', async () => {
         pageRangeParam = `&pages=${parsed.join(',')}`;
     }
 
-    const savedEmail   = localStorage.getItem('examcrop_email') || '';
-    const isReturning  = !!savedEmail;
+    const savedEmail     = localStorage.getItem('examcrop_email') || '';
+    const isReturning    = !!savedEmail;
     const returningParam = isReturning ? `&returning_email=${encodeURIComponent(savedEmail)}` : '';
     const url = `${API_BASE}/api/split?dpi=200&conf_threshold=0.10${pageRangeParam}&is_returning=${isReturning}${returningParam}&source_page=${window.EXAMCROP_SOURCE_PAGE}`;
 
@@ -237,16 +243,16 @@ splitBtn.addEventListener('click', async () => {
         progressText.textContent = 'Rendering...';
 
         const blob = await res.blob();
-        pendingBlob = blob;
+        pendingBlob     = blob;
         pendingFilename = selectedFile.name.replace(/\.[^.]+$/, '') + '_questions.pdf';
-        questions = await extractPages(blob);
-        qIdx = 0;
+        processedQuestions  = await extractPages(blob);
+        currentQuestionIndex = 0;
 
         progressBar.style.width = '100%';
         progressCont.classList.remove('show');
         progressBar.style.width = '0%';
         splitBtn.disabled = false;
-        renderMiniViewer();
+        showViewer();
     } catch(err) {
         progressCont.classList.remove('show');
         progressBar.style.width = '0%';
@@ -256,25 +262,115 @@ splitBtn.addEventListener('click', async () => {
     }
 });
 
-function renderMiniViewer() {
-    miniViewer.classList.add('show');
-    miniViewerImg.src = questions[qIdx];
-    miniCounter.textContent = `Question ${qIdx + 1} of ${questions.length}`;
-    miniPrev.disabled = qIdx === 0;
-    miniNext.disabled  = qIdx === questions.length - 1;
-    document.getElementById('miniViewerTitle').textContent = 'Questions Preview';
-    miniViewer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+// ── Viewer ────────────────────────────────────────────────────────────────────
+
+function showViewer() {
+    viewerTitle.textContent = 'Questions Preview';
+    currentQuestionIndex = 0;
+    updateViewerUI();
+    viewerOverlay.classList.add('show');
+    updateSaveBankBtn();
 }
 
-miniPrev.addEventListener('click', () => { qIdx--; renderMiniViewer(); });
-miniNext.addEventListener('click', () => { qIdx++; renderMiniViewer(); });
-document.getElementById('miniViewerClose').addEventListener('click', () => miniViewer.classList.remove('show'));
+function hideViewer() {
+    viewerOverlay.classList.remove('show');
+}
 
-downloadBtn.addEventListener('click', () => {
+function updateViewerUI() {
+    if (processedQuestions.length === 0) return;
+    viewerImage.src = processedQuestions[currentQuestionIndex].imageUrl || processedQuestions[currentQuestionIndex];
+    viewerCounter.textContent = `Question ${currentQuestionIndex + 1} of ${processedQuestions.length}`;
+    viewerPrev.disabled = currentQuestionIndex === 0;
+    viewerNext.disabled = currentQuestionIndex === processedQuestions.length - 1;
+    viewerTrash.classList.remove('hidden');
+    downloadAll.textContent = 'Download All (PDF)';
+}
+
+function navigateQuestion(dir) {
+    const next = currentQuestionIndex + dir;
+    if (next >= 0 && next < processedQuestions.length) {
+        currentQuestionIndex = next;
+        updateViewerUI();
+    }
+}
+
+viewerClose.addEventListener('click', hideViewer);
+viewerPrev.addEventListener('click', () => navigateQuestion(-1));
+viewerNext.addEventListener('click', () => navigateQuestion(1));
+
+viewerTrash.addEventListener('click', () => {
+    if (processedQuestions.length <= 1) {
+        viewerTrash.style.borderColor = 'rgba(220,53,69,0.8)';
+        viewerTrash.style.boxShadow   = '0 0 12px rgba(220,53,69,0.5)';
+        setTimeout(() => { viewerTrash.style.borderColor = ''; viewerTrash.style.boxShadow = ''; }, 800);
+        return;
+    }
+    processedQuestions.splice(currentQuestionIndex, 1);
+    if (currentQuestionIndex >= processedQuestions.length) currentQuestionIndex = processedQuestions.length - 1;
+    updateViewerUI();
+});
+
+document.addEventListener('keydown', e => {
+    if (!viewerOverlay.classList.contains('show')) return;
+    if (e.key === 'ArrowLeft')  navigateQuestion(-1);
+    if (e.key === 'ArrowRight') navigateQuestion(1);
+    if (e.key === 'Escape')     hideViewer();
+});
+
+downloadAll.addEventListener('click', () => {
     const saved = localStorage.getItem('examcrop_email');
     if (saved) { submitEmailSilent(saved); buildAndDownload(); }
-    else        { modalOverlay.classList.add('show'); }
+    else       { hideViewer(); modalOverlay.classList.add('show'); }
 });
+
+// ── Save to Bank ──────────────────────────────────────────────────────────────
+
+function updateSaveBankBtn() {
+    if (!saveBankBtn) return;
+    const loggedIn  = window.Auth && window.Auth.isLoggedIn();
+    const hasResult = processedQuestions.length > 0 && window._lastUploadId;
+    saveBankBtn.style.display = (loggedIn && hasResult) ? '' : 'none';
+}
+
+if (saveBankBtn) {
+    saveBankBtn.addEventListener('click', async () => {
+        const token    = window.Auth && window.Auth.getToken();
+        const uploadId = window._lastUploadId;
+        if (!token || !uploadId || _bankSaved) return;
+
+        saveBankBtn.disabled    = true;
+        saveBankBtn.textContent = 'Saving...';
+
+        try {
+            const res = await fetch(`${API_BASE}/api/save-questions`, {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ upload_id: uploadId }),
+            });
+
+            if (res.status === 409) {
+                _bankSaved = true;
+                saveBankBtn.textContent = '✓ Already in Bank';
+                saveBankBtn.classList.add('saved');
+                saveBankBtn.disabled = false;
+                return;
+            }
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || 'Save failed');
+            }
+            _bankSaved = true;
+            saveBankBtn.textContent = '✓ Saved to Bank';
+            saveBankBtn.classList.add('saved');
+            saveBankBtn.disabled = false;
+        } catch(err) {
+            saveBankBtn.textContent = '💾 Save to Bank';
+            saveBankBtn.disabled    = false;
+        }
+    });
+}
+
+// ── Email / download ──────────────────────────────────────────────────────────
 
 emailForm.addEventListener('submit', async e => {
     e.preventDefault();
@@ -314,21 +410,20 @@ async function buildAndDownload() {
 
         const bytes = new Uint8Array(await (await entry.async('blob')).arrayBuffer());
         const { PDFDocument } = PDFLib;
-        const src = await PDFDocument.load(bytes);
-        const out = await PDFDocument.create();
-        const copied = await out.copyPages(src, questions.map((_, i) => i));
+        const src    = await PDFDocument.load(bytes);
+        const out    = await PDFDocument.create();
+        const copied = await out.copyPages(src, processedQuestions.map((_, i) => i));
         copied.forEach(p => out.addPage(p));
         const outBytes = await out.save();
 
         const a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob([outBytes], { type: 'application/pdf' }));
+        a.href     = URL.createObjectURL(new Blob([outBytes], { type: 'application/pdf' }));
         a.download = pendingFilename;
         a.click();
 
-        successMsg.textContent = `Downloaded ${questions.length} questions.`;
+        successMsg.textContent = `Downloaded ${processedQuestions.length} questions.`;
         successMsg.classList.add('show');
     } catch(err) {
-        console.error('Download failed:', err);
         errorMsg.textContent = 'Download failed. Please try again.';
         errorMsg.classList.add('show');
     }
