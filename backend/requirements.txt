@@ -7,7 +7,6 @@ python-multipart==0.0.21
 
 # ML/AI - Notice the +cpu suffix and NO index tags here
 ultralytics>=8.3.70
-ultralytics-opencv-headless
 torch==2.1.0+cpu
 torchvision==0.16.0+cpu
 
@@ -17,6 +16,7 @@ Pillow==11.0.0
 pillow-heif
 
 # Computer Vision
+opencv-python-headless==4.8.1.78
 numpy==1.26.4
 pytesseract==0.3.13
 
