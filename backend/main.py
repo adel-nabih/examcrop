@@ -29,6 +29,7 @@ from pocketbase import PocketBase
 from contextlib import asynccontextmanager
 
 import json
+import requests
 
 from split_pdf import YOLOQuestionSplitter
 import pillow_heif
@@ -36,6 +37,7 @@ from PIL import Image
 from dotenv import load_dotenv
 load_dotenv()
 
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 IS_RAILWAY = os.environ.get("RAILWAY_ENVIRONMENT_NAME") is not None
 
 if IS_RAILWAY:
@@ -352,7 +354,7 @@ async def split_worksheet(
         os.makedirs(output_dir, exist_ok=True)
 
         try:
-            yolo_splitter.split_worksheet(
+            crop_info = yolo_splitter.split_worksheet(
                 input_path=input_path,
                 output_dir=output_dir,
                 dpi=dpi,
@@ -429,6 +431,8 @@ async def split_worksheet(
                 'dpi':             dpi,
                 'conf_threshold':  conf_threshold,
                 'questions_count': len(output_files),
+                'crop_info':       crop_info,
+                'pdf_path':        input_path,
             }
 
             def upload_async():
@@ -467,6 +471,26 @@ async def split_worksheet(
                     # individual question PDFs
                     for pdf_path in background_data['output_files']:
                         upload_to_r2(pdf_path, f"{prefix}/output/{Path(pdf_path).name}")
+
+                    # JPEG thumbnails — render page 0 of each already-cropped question PDF
+                    for pdf_path in background_data['output_files']:
+                        try:
+                            q_stem = Path(pdf_path).stem  # e.g. "question_01"
+                            thumb_doc = fitz.open(pdf_path)
+                            page = thumb_doc[0]
+                            mat = fitz.Matrix(2.0, 2.0)  # 144 dpi
+                            pix = page.get_pixmap(matrix=mat, alpha=False)
+                            jpeg_bytes = pix.tobytes("jpeg", jpg_quality=85)
+                            thumb_doc.close()
+                            thumb_key = f"{prefix}/thumbnails/{q_stem}.jpg"
+                            r2_client.put_object(
+                                Bucket=R2_BUCKET_NAME,
+                                Key=thumb_key,
+                                Body=jpeg_bytes,
+                                ContentType='image/jpeg',
+                            )
+                        except Exception as thumb_err:
+                            print(f"⚠️ Thumbnail failed for {Path(pdf_path).name}: {thumb_err}")
 
                     print(f"✅ R2 upload completed: {prefix}")
 
@@ -689,6 +713,261 @@ async def collect_feedback(request: dict):
 
 
 
+
+
+# ── Base taxonomy ─────────────────────────────────────────────────────────────
+
+BASE_TAXONOMY = {
+    "Mathematics": [
+        "Algebra", "Quadratic Equations", "Simultaneous Equations",
+        "Calculus", "Differentiation", "Integration",
+        "Statistics", "Probability", "Distributions",
+        "Geometry", "Trigonometry", "Vectors",
+        "Mechanics", "Dynamics", "Statics",
+        "Number Theory", "Sequences & Series", "Matrices",
+    ],
+    "Physics": [
+        "Mechanics", "Kinematics", "Forces", "Momentum", "Energy",
+        "Electricity", "Circuits", "Electromagnetism",
+        "Waves", "Optics", "Sound",
+        "Thermal Physics", "Thermodynamics",
+        "Modern Physics", "Quantum Physics", "Nuclear Physics",
+        "Fields", "Gravitational Fields", "Electric Fields",
+    ],
+    "Chemistry": [
+        "Atomic Structure", "Periodic Table", "Bonding",
+        "Stoichiometry", "Moles", "Chemical Equations",
+        "Energetics", "Thermochemistry", "Kinetics",
+        "Equilibrium", "Acids & Bases", "Redox",
+        "Organic Chemistry", "Electrochemistry",
+    ],
+    "Biology": [
+        "Cell Biology", "Cell Division", "Microscopy",
+        "Molecular Biology", "DNA", "Protein Synthesis",
+        "Genetics", "Inheritance", "Evolution",
+        "Ecology", "Ecosystems", "Biodiversity",
+        "Human Biology", "Digestion", "Circulation",
+        "Respiration", "Nervous System", "Hormones",
+        "Plant Biology", "Photosynthesis", "Transport in Plants",
+        "Microbiology", "Immunity",
+    ],
+    "Accounting": [
+        "Financial Statements", "Income Statement", "Balance Sheet",
+        "Ledgers", "Double Entry", "Trial Balance",
+        "Depreciation", "Bank Reconciliation",
+        "Ratios", "Cash Flow", "Budgeting", "Partnerships",
+    ],
+    "Economics": [
+        "Supply & Demand", "Elasticity", "Market Structures",
+        "Macroeconomics", "GDP", "Inflation", "Unemployment",
+        "Monetary Policy", "Fiscal Policy",
+        "International Trade", "Exchange Rates", "Development",
+    ],
+    "Business": [
+        "Marketing", "Market Research", "Pricing",
+        "Finance", "Profit & Loss", "Break Even",
+        "Operations", "Production", "Quality",
+        "Human Resources", "Motivation", "Recruitment",
+        "Strategy", "SWOT", "Stakeholders",
+    ],
+    "History": [
+        "Source Analysis", "Causation", "Consequence",
+        "Change & Continuity", "Significance", "Essay Writing",
+    ],
+    "Geography": [
+        "Physical Geography", "Rivers", "Coasts", "Glaciation",
+        "Human Geography", "Population", "Urbanisation",
+        "Development", "Climate Change", "Ecosystems",
+    ],
+    "English Language": [
+        "Reading Comprehension", "Summary", "Directed Writing",
+        "Composition", "Language Analysis", "Audience & Purpose",
+    ],
+    "English Literature": [
+        "Poetry Analysis", "Prose Analysis", "Drama",
+        "Themes", "Character", "Context", "Comparison",
+    ],
+    "Sociology": [
+        "Research Methods", "Family", "Education",
+        "Crime & Deviance", "Stratification", "Culture & Identity",
+    ],
+}
+
+TAGGING_PROMPT = """You are an expert exam question classifier. Look at the question image carefully and return ONLY a JSON object with these fields:
+
+{{
+  "subject": string,
+  "topic": string,
+  "subtopic": string or null,
+  "difficulty": "Easy" | "Medium" | "Hard",
+  "question_type": "MCQ" | "structured" | "short_answer" | "essay" | "data_response",
+  "marks": integer or null,
+  "keywords": string or null,
+  "has_question_number": true | false,
+  "sub_questions_independent": true | false | null
+}}
+
+- subject must be one of the keys in the taxonomy below. Read the question text and content carefully to determine it.
+- topic must be one of the topics listed under the identified subject in the taxonomy below.
+- marks: only if explicitly shown in the question (e.g. "[4]" or "(3 marks)"), otherwise null.
+- sub_questions_independent: true if sub-parts can stand alone, false if they build on each other, null if no sub-questions.
+
+Taxonomy:
+{taxonomy}
+
+User's custom topics (prefer these if they match):
+{custom_topics}"""
+
+
+def _get_user_taxonomy(user_id: str) -> dict:
+    """Fetch user's custom taxonomy from PocketBase. Returns {} on any failure."""
+    try:
+        pb.admins.auth_with_password(POCKETBASE_EMAIL, POCKETBASE_PASSWORD)
+        results = pb.collection("user_taxonomy").get_list(1, 1, {
+            "filter": f'user = "{user_id}"',
+        })
+        if results.items:
+            rec = vars(results.items[0]) if not isinstance(results.items[0], dict) else results.items[0]
+            raw = rec.get("topics", {})
+            if isinstance(raw, str):
+                return json.loads(raw)
+            return raw or {}
+    except Exception as e:
+        print(f"⚠️ Could not fetch user_taxonomy for {user_id}: {e}")
+    return {}
+
+
+def tag_questions_async(tagging_data: dict):
+    """
+    Background thread: fetch each question thumbnail from R2, send to GPT-4o-mini,
+    update PocketBase record with tags and tagging_status.
+    """
+    if not OPENAI_API_KEY:
+        print("⚠️ OPENAI_API_KEY not set — skipping tagging")
+        return
+
+    record_ids = tagging_data["record_ids"]
+    upload_id  = tagging_data["upload_id"]
+    user_id    = tagging_data["user_id"]
+
+    custom_taxonomy = _get_user_taxonomy(user_id)
+
+    # Merge base + custom taxonomy for the prompt
+    merged_taxonomy = {k: list(v) for k, v in BASE_TAXONOMY.items()}
+    for subj, topics in custom_taxonomy.items():
+        subj_norm = subj.strip()
+        if subj_norm in merged_taxonomy:
+            existing = set(merged_taxonomy[subj_norm])
+            merged_taxonomy[subj_norm] = merged_taxonomy[subj_norm] + [t for t in topics if t not in existing]
+        else:
+            merged_taxonomy[subj_norm] = topics
+
+    taxonomy_str     = json.dumps(merged_taxonomy, indent=2)
+    custom_topics_str = json.dumps(custom_taxonomy, indent=2) if custom_taxonomy else "None"
+
+    prompt = TAGGING_PROMPT.format(
+        taxonomy=taxonomy_str,
+        custom_topics=custom_topics_str,
+    )
+
+    print(f"🏷️  Tagging {len(record_ids)} questions for upload {upload_id}")
+
+    for i, record_id in enumerate(record_ids, 1):
+        q_num = i  # record_ids are in order 1..N
+        thumb_key = f"uploads/{upload_id}/thumbnails/question_{q_num:02d}.jpg"
+
+        try:
+            # Fetch thumbnail bytes from R2 — retry because R2 upload may still be in progress
+            import base64, time as _time
+            from botocore.exceptions import ClientError as _BotoClientError
+            jpeg_bytes = None
+            for attempt in range(6):
+                try:
+                    obj = r2_client.get_object(Bucket=R2_BUCKET_NAME, Key=thumb_key)
+                    jpeg_bytes = obj["Body"].read()
+                    break
+                except _BotoClientError as boto_err:
+                    if boto_err.response['Error']['Code'] in ('NoSuchKey', '404'):
+                        if attempt < 5:
+                            wait = 5 * (attempt + 1)  # 5, 10, 15, 20, 25 s
+                            print(f"  ⏳ Thumbnail not ready yet for q{q_num}, retrying in {wait}s (attempt {attempt+1}/6)")
+                            _time.sleep(wait)
+                        else:
+                            raise
+                    else:
+                        raise  # unexpected R2 error — don't retry
+
+            if jpeg_bytes is None:
+                raise RuntimeError(f"Thumbnail never appeared in R2 after retries: {thumb_key}")
+
+            image_b64 = base64.b64encode(jpeg_bytes).decode("utf-8")
+
+            # Call GPT-4o-mini vision
+            response = requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENAI_API_KEY}",
+                    "Content-Type":  "application/json",
+                },
+                json={
+                    "model": "gpt-4o-mini",
+                    "max_tokens": 500,
+                    "response_format": {"type": "json_object"},
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text",       "text": prompt},
+                                {"type": "image_url",  "image_url": {
+                                    "url":    f"data:image/jpeg;base64,{image_b64}",
+                                    "detail": "high",
+                                }},
+                            ],
+                        }
+                    ],
+                },
+                timeout=30,
+            )
+            response.raise_for_status()
+            raw_content = response.json()["choices"][0]["message"]["content"]
+            print(f"  🤖 GPT raw response for q{q_num}: {raw_content}")
+            tags = json.loads(raw_content)
+
+            # Normalise string fields
+            def norm(v):
+                return v.strip().lower() if isinstance(v, str) else v
+
+            update_payload = {
+                "subject":                  tags.get("subject"),
+                "topic":                    tags.get("topic"),
+                "subtopic":                 tags.get("subtopic"),
+                "difficulty":               norm(tags.get("difficulty")),
+                "q_type":                   norm(tags.get("question_type")),
+                "marks":                    tags.get("marks"),
+                "keywords":                 tags.get("keywords"),
+                "has_question_number":      tags.get("has_question_number"),
+                "sub_questions_independent": tags.get("sub_questions_independent"),
+                "ai_tagged":                True,
+                "tagging_status":           "complete",
+            }
+            # Remove None values so we don't overwrite existing data with null
+            update_payload = {k: v for k, v in update_payload.items() if v is not None}
+
+            pb.admins.auth_with_password(POCKETBASE_EMAIL, POCKETBASE_PASSWORD)
+            pb.collection("questions").update(record_id, update_payload)
+            print(f"  ✅ Tagged q{q_num}: subject={tags.get('subject')} topic={tags.get('topic')}")
+
+        except Exception as e:
+            print(f"  ❌ Tagging failed for record {record_id} (q{q_num}): {e}")
+            try:
+                pb.admins.auth_with_password(POCKETBASE_EMAIL, POCKETBASE_PASSWORD)
+                pb.collection("questions").update(record_id, {"tagging_status": "failed"})
+            except Exception as pb_err:
+                print(f"  ⚠️ Could not mark tagging_status=failed for {record_id}: {pb_err}")
+
+    print(f"🏷️  Tagging complete for upload {upload_id}")
+
+
 # ── Auth dependency ──────────────────────────────────────────────────────────
 
 security = HTTPBearer()
@@ -722,6 +1001,26 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise HTTPException(status_code=401, detail=f"Auth error: {str(e)}")
 
 
+# ── Taxonomy endpoint ─────────────────────────────────────────────────────────
+
+@app.get("/api/taxonomy")
+async def get_taxonomy(user: dict = Depends(get_current_user)):
+    """
+    Return base taxonomy merged with the user's custom topics.
+    Frontend uses this for tag editing dropdowns.
+    """
+    custom = _get_user_taxonomy(user["id"])
+    merged = {k: list(v) for k, v in BASE_TAXONOMY.items()}
+    for subj, topics in custom.items():
+        subj_norm = subj.strip()
+        if subj_norm in merged:
+            existing = set(merged[subj_norm])
+            merged[subj_norm] = merged[subj_norm] + [t for t in topics if t not in existing]
+        else:
+            merged[subj_norm] = topics
+    return {"taxonomy": merged, "custom": custom}
+
+
 # ── R2 signed URL ─────────────────────────────────────────────────────────────
 
 @app.get("/api/r2-url")
@@ -747,6 +1046,34 @@ async def get_r2_signed_url(
         return {"url": url, "expires_in": 3600}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Could not generate URL: {str(e)}")
+
+
+@app.post("/api/r2-urls")
+async def get_r2_signed_urls_batch(
+    request: dict,
+    user: dict = Depends(get_current_user),
+):
+    """Batch presigned URL generation. Body: {"keys": ["key1", "key2", ...]} — max 100."""
+    keys = request.get("keys", [])
+    if not keys or len(keys) > 100:
+        raise HTTPException(status_code=400, detail="Provide between 1 and 100 keys.")
+    if not r2_client:
+        raise HTTPException(status_code=503, detail="R2 not available.")
+    for key in keys:
+        if not key.startswith("uploads/"):
+            raise HTTPException(status_code=400, detail=f"Invalid key: {key}")
+    urls = {}
+    for key in keys:
+        try:
+            urls[key] = r2_client.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": R2_BUCKET_NAME, "Key": key},
+                ExpiresIn=3600,
+            )
+        except Exception:
+            pass  # skip failed keys — frontend falls back gracefully
+    return {"urls": urls, "expires_in": 3600}
+
 
 
 @app.post("/api/save-questions")
@@ -794,21 +1121,38 @@ async def save_questions(
     # Create one record per question
     created = []
     for i in range(1, questions_count + 1):
-        r2_key = f"uploads/{upload_id}/output/question_{i:02d}.pdf"
+        r2_key       = f"uploads/{upload_id}/output/question_{i:02d}.pdf"
+        thumbnail_key = f"uploads/{upload_id}/thumbnails/question_{i:02d}.jpg"
         try:
             record = pb.collection("questions").create({
-                "user":       user["id"],
-                "upload_id":  upload_id,
-                "r2_key":     r2_key,
-                "source_pdf": filename,
-                "subject":    subject,
-                "curriculum": curriculum,
-                "ai_tagged":  False,
-                "q_number":   i,
+                "user":            user["id"],
+                "upload_id":       upload_id,
+                "r2_key":          r2_key,
+                "thumbnail_key":   thumbnail_key,
+                "source_pdf":      filename,
+                "subject":         subject,
+                "curriculum":      curriculum,
+                "ai_tagged":       False,
+                "tagging_status":  "pending",
+                "q_number":        i,
             })
             created.append(record.id)
         except Exception as e:
             print(f"Could not save question {i}: {e}")
+
+    # Fire background tagging job if any records were created
+    if created:
+        tagging_data = {
+            'record_ids': created,
+            'upload_id':  upload_id,
+            'user_id':    user["id"],
+        }
+        threading.Thread(
+            target=tag_questions_async,
+            args=(tagging_data,),
+            daemon=True,
+        ).start()
+        print(f"🏷️  Started background tagging for {len(created)} questions ({upload_id})")
 
     return {
         "status":  "saved",
@@ -828,6 +1172,7 @@ async def get_my_questions(
     curriculum: str = Query(None),
     difficulty: str = Query(None),
     q_type: str = Query(None),
+    search: str = Query(None),
 ):
     """Return paginated questions for the logged-in user."""
     try:
@@ -838,6 +1183,9 @@ async def get_my_questions(
         if curriculum: filters.append(f'curriculum = "{curriculum}"')
         if difficulty: filters.append(f'difficulty = "{difficulty}"')
         if q_type:     filters.append(f'q_type = "{q_type}"')
+        if search:
+            s = search.replace('"', '')
+            filters.append(f'(keywords ~ "{s}" || source_pdf ~ "{s}" || topic ~ "{s}" || subtopic ~ "{s}")')
 
         result = pb.collection("questions").get_list(page, per_page, {
             "filter":  " && ".join(filters),
@@ -847,14 +1195,6 @@ async def get_my_questions(
         questions_out = []
         for r in result.items:
             q = vars(r) if not isinstance(r, dict) else r
-            # Derive thumbnail key so the frontend can request it directly
-            r2_key = q.get("r2_key", "")
-            if r2_key:
-                parts = r2_key.split("/")
-                jpg_name = Path(parts[-1]).stem + ".jpg"
-                q["thumbnail_key"] = "/".join(parts[:-2]) + f"/thumbnails/{jpg_name}"
-            else:
-                q["thumbnail_key"] = None
             questions_out.append(q)
 
         return {
@@ -865,6 +1205,124 @@ async def get_my_questions(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Update a question's tags ──────────────────────────────────────────────────
+
+@app.patch("/api/questions/{question_id}")
+async def update_question(
+    question_id: str,
+    request: dict,
+    user: dict = Depends(get_current_user),
+):
+    """Update tag fields on a question. User must own it."""
+    ALLOWED_FIELDS = {
+        "subject", "topic", "subtopic", "difficulty", "q_type",
+        "marks", "keywords", "curriculum", "has_question_number",
+        "sub_questions_independent",
+    }
+    try:
+        pb.admins.auth_with_password(POCKETBASE_EMAIL, POCKETBASE_PASSWORD)
+        record = pb.collection("questions").get_one(question_id)
+        rec_dict = vars(record) if not isinstance(record, dict) else record
+        if rec_dict.get("user") != user["id"]:
+            raise HTTPException(status_code=403, detail="Not your question.")
+        payload = {k: v for k, v in request.items() if k in ALLOWED_FIELDS}
+        if not payload:
+            raise HTTPException(status_code=400, detail="No valid fields to update.")
+        updated = pb.collection("questions").update(question_id, payload)
+        return {"status": "updated", "id": question_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Poll tagging status ───────────────────────────────────────────────────────
+
+@app.post("/api/questions/tagging-status")
+async def get_tagging_status(
+    request: dict,
+    user: dict = Depends(get_current_user),
+):
+    """
+    Poll tagging status for a list of question IDs.
+    Body: {"ids": ["id1", "id2", ...]}
+    Returns only the fields needed to update the UI — no PDFs, no keys.
+    """
+    ids = request.get("ids", [])
+    if not ids or len(ids) > 100:
+        raise HTTPException(status_code=400, detail="Provide between 1 and 100 ids.")
+    try:
+        pb.admins.auth_with_password(POCKETBASE_EMAIL, POCKETBASE_PASSWORD)
+        # Fetch all in one PocketBase query using OR filter
+        id_filter = " || ".join(f'id = "{qid}"' for qid in ids)
+        result = pb.collection("questions").get_list(1, len(ids), {
+            "filter": f'user = "{user["id"]}" && ({id_filter})',
+        })
+        out = []
+        for r in result.items:
+            q = vars(r) if not isinstance(r, dict) else r
+            out.append({
+                "id":             q.get("id"),
+                "tagging_status": q.get("tagging_status"),
+                "subject":        q.get("subject"),
+                "topic":          q.get("topic"),
+                "difficulty":     q.get("difficulty"),
+                "q_type":         q.get("q_type"),
+                "marks":          q.get("marks"),
+                "keywords":       q.get("keywords"),
+                "subtopic":       q.get("subtopic"),
+                "curriculum":     q.get("curriculum"),
+            })
+        return {"questions": out}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.patch("/api/taxonomy")
+async def update_taxonomy(
+    request: dict,
+    user: dict = Depends(get_current_user),
+):
+    """
+    Upsert user's custom taxonomy. request body: {"subject": str, "topic": str}
+    Adds the topic to the subject's list if not already present.
+    """
+    subject = (request.get("subject") or "").strip()
+    topic   = (request.get("topic")   or "").strip().lower()
+    if not subject or not topic:
+        raise HTTPException(status_code=400, detail="subject and topic required.")
+    try:
+        pb.admins.auth_with_password(POCKETBASE_EMAIL, POCKETBASE_PASSWORD)
+        results = pb.collection("user_taxonomy").get_list(1, 1, {
+            "filter": f'user = "{user["id"]}"',
+        })
+        if results.items:
+            rec = vars(results.items[0]) if not isinstance(results.items[0], dict) else results.items[0]
+            rec_id = rec.get("id")
+            raw = rec.get("topics", {})
+            existing = json.loads(raw) if isinstance(raw, str) else (raw or {})
+            topics_list = existing.get(subject, [])
+            if topic not in [t.lower() for t in topics_list]:
+                topics_list.append(topic)
+                existing[subject] = topics_list
+            pb.collection("user_taxonomy").update(rec_id, {"topics": json.dumps(existing)})
+        else:
+            pb.collection("user_taxonomy").create({
+                "user":    user["id"],
+                "subject": subject,
+                "topics":  json.dumps({subject: [topic]}),
+            })
+        return {"status": "ok", "subject": subject, "topic": topic}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 
 
 # ── Delete a question ─────────────────────────────────────────────────────────
@@ -889,7 +1347,74 @@ async def delete_question(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Clean URL mappings — /pricing serves pricing.html, /igcse serves igcse.html etc.
+
+# ── Bulk download ─────────────────────────────────────────────────────────────
+
+@app.post("/api/download-questions")
+async def download_questions(
+    request: dict,
+    user: dict = Depends(get_current_user),
+):
+    """
+    Fetch multiple question PDFs from R2, zip them, stream the ZIP back.
+    Body: {"ids": ["id1", "id2", ...]}  — max 50.
+    """
+    ids = request.get("ids", [])
+    if not ids:
+        raise HTTPException(status_code=400, detail="No question IDs provided.")
+    if len(ids) > 50:
+        raise HTTPException(status_code=400, detail="Maximum 50 questions per download.")
+
+    try:
+        pb.admins.auth_with_password(POCKETBASE_EMAIL, POCKETBASE_PASSWORD)
+
+        # Verify ownership and collect r2_keys in parallel
+        def fetch_record(qid):
+            rec = pb.collection("questions").get_one(qid)
+            return vars(rec) if not isinstance(rec, dict) else rec
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            records = list(pool.map(fetch_record, ids))
+
+        for rec in records:
+            if rec.get("user") != user["id"]:
+                raise HTTPException(status_code=403, detail="Not your question.")
+
+        # Fetch PDFs from R2 in parallel
+        def fetch_pdf(rec):
+            key = rec.get("r2_key", "")
+            obj = r2_client.get_object(Bucket=R2_BUCKET_NAME, Key=key)
+            return {
+                "filename": f"Q{rec.get('q_number','?')}_{Path(key).name}",
+                "data":     obj["Body"].read(),
+            }
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            pdf_files = list(pool.map(fetch_pdf, records))
+
+        # Build ZIP in memory
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for pf in pdf_files:
+                zf.writestr(pf["filename"], pf["data"])
+        zip_buffer.seek(0)
+
+        zip_id   = uuid.uuid4().hex[:8]
+        zip_name = f"examcrop_{zip_id}.zip"
+
+        return StreamingResponse(
+            zip_buffer,
+            media_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename={zip_name}"},
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 CLEAN_URL_MAP = {
     "pricing":   "pricing.html",
     "igcse":     "igcse.html",

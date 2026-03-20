@@ -110,7 +110,7 @@ class YOLOQuestionSplitter:
     
     def detect_questions_batch(self, images: List[np.ndarray], conf_threshold: float = 0.1) -> List[List[Dict]]:
         """Batch YOLO inference for multiple images - MAJOR SPEEDUP"""
-        results = self.model(images, conf=conf_threshold, imgsz=800, verbose=False)
+        results = self.model(images, conf=conf_threshold, imgsz=1024, verbose=False)
         
         all_blocks = []
         for result in results:
@@ -136,7 +136,7 @@ class YOLOQuestionSplitter:
         
         return all_blocks
     
-    def apply_nms(self, blocks: List[Dict], iou_threshold: float = 0.5) -> List[Dict]:
+    def apply_nms(self, blocks: List[Dict], iou_threshold: float = 0.85) -> List[Dict]:
         """Non-Maximum Suppression to remove duplicates"""
         if len(blocks) == 0:
             return []
@@ -197,9 +197,10 @@ class YOLOQuestionSplitter:
         
         return pd.DataFrame(questions)
     
-    def crop_questions_from_pdf(self, pdf_doc: fitz.Document, questions_df: pd.DataFrame, 
-                               page_num: int, dpi: int, output_dir: str):
-        """Crop questions directly from PDF without intermediate conversions - MAJOR SPEEDUP"""
+    def crop_questions_from_pdf(self, pdf_doc: fitz.Document, questions_df: pd.DataFrame,
+                               page_num: int, dpi: int, output_dir: str) -> List[Dict]:
+        """Crop questions directly from PDF without intermediate conversions - MAJOR SPEEDUP.
+        Returns list of {q_num, page_num, rect} for thumbnail generation."""
         page = pdf_doc[page_num]
         
         if page.rotation != 0:
@@ -210,6 +211,7 @@ class YOLOQuestionSplitter:
         
         original_rect = page.rect
         margin = 5
+        crop_info = []
         
         for _, row in questions_df.iterrows():
             q_num = int(row['question_num'])
@@ -232,7 +234,34 @@ class YOLOQuestionSplitter:
             filepath = Path(output_dir) / f"question_{q_num:02d}.pdf"
             out_pdf.save(filepath, garbage=4, deflate=True, clean=True, pretty=False)
             out_pdf.close()
+
+            crop_info.append({'q_num': q_num, 'page_num': page_num, 'rect': rect})
+
+        return crop_info
     
+    def render_question_thumbnail(self, pdf_doc: fitz.Document, page_num: int,
+                                   rect: fitz.Rect, jpeg_quality: int = 85) -> bytes:
+        """
+        Render a question crop rect from a PDF page to JPEG bytes.
+        Used by main.py during background R2 upload to generate thumbnails.
+        Returns raw JPEG bytes, or raises on failure.
+        """
+        zoom = 2.0  # 144 dpi — crisp enough for bank thumbnails, small file size
+        mat = fitz.Matrix(zoom, zoom)
+        page = pdf_doc[page_num]
+        clip = fitz.Rect(rect)  # copy — avoid mutating caller's rect
+        pix = page.get_pixmap(matrix=mat, clip=clip, alpha=False)
+        img_array = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
+        if pix.n == 3:
+            img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+        else:
+            img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGBA2BGR)
+        encode_params = [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality]
+        success, buf = cv2.imencode('.jpg', img_bgr, encode_params)
+        if not success:
+            raise RuntimeError(f"JPEG encoding failed for page {page_num} rect {rect}")
+        return buf.tobytes()
+
     def visualize(self, image: np.ndarray, df: pd.DataFrame, output_path: str):
         """Save visualization of detected questions"""
         vis = image.copy()
@@ -248,17 +277,20 @@ class YOLOQuestionSplitter:
         
         cv2.imwrite(output_path, vis)
     
-    def split_worksheet(self, input_path: str, output_dir: str, 
+    def split_worksheet(self, input_path: str, output_dir: str,
                        dpi: int = 200, cleanup_temp: bool = True,
-                       conf_threshold: float = 0.1):
+                       conf_threshold: float = 0.1) -> List[Dict]:
         """
         Main pipeline - HEAVILY OPTIMIZED
-        
+
         Key optimizations:
         1. Parallel page rendering
         2. Batch YOLO inference
         3. Direct PDF cropping (no intermediate image files)
         4. Reduced I/O operations
+
+        Returns list of {q_num, page_num, rect} for each detected question,
+        used by main.py to generate JPEG thumbnails during background R2 upload.
         """
         temp_pdf = None
         pdf_path = self.convert_to_pdf(input_path)
@@ -274,6 +306,7 @@ class YOLOQuestionSplitter:
             all_questions_found = False
             total_questions = 0
             question_offset = 0
+            all_crop_info: List[Dict] = []
             
             pdf_doc = fitz.open(pdf_path)
             
@@ -294,12 +327,15 @@ class YOLOQuestionSplitter:
                     debug_path = f"debug_yolo_page_{page_num+1}.png"
                     self.visualize(page_data['image'], df, debug_path)
                 
-                self.crop_questions_from_pdf(pdf_doc, df, page_num, dpi, output_dir)
+                page_crop_info = self.crop_questions_from_pdf(pdf_doc, df, page_num, dpi, output_dir)
+                all_crop_info.extend(page_crop_info)
             
             pdf_doc.close()
             
             if not all_questions_found:
                 sys.exit(1)
+
+            return all_crop_info
         
         finally:
             if temp_pdf and cleanup_temp and os.path.exists(temp_pdf):
