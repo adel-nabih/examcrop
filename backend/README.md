@@ -1,160 +1,78 @@
-# 📄 Worksheet Splitter
+# ExamCrop
 
-AI-powered worksheet question splitter using custom-trained YOLOv26.
+AI-powered tool that splits exam papers and worksheets into individual questions as separate PDFs. Uses a custom-trained YOLO26 model for visual question boundary detection — no text parsing.
 
-Split exam worksheets into individual questions automatically using computer vision.
+## Stack
 
-## ✨ Features
+- **Backend** — FastAPI (Railway)
+- **Model** — YOLO26s, custom trained
+- **Storage** — Cloudflare R2
+- **Database/Auth** — PocketBase (Railway)
+- **Frontend** — Vanilla JS, served by FastAPI
 
-- 🤖 Custom YOLOv26 model for question detection
-- 📦 Outputs combined PDF + individual questions
-- 🚀 Fast processing (GPU-accelerated)
-- 🔒 Rate limiting (10 requests/hour per IP)
-- 📏 20MB file size limit
-- 🎯 92.9% detection accuracy (mAP50)
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Python 3.9+
-- Tesseract OCR installed
-
-**macOS:**
-```bash
-brew install tesseract
-```
-
-**Ubuntu/Debian:**
-```bash
-sudo apt-get install tesseract-ocr
-```
-
-**Windows:**
-Download from: https://github.com/UB-Mannheim/tesseract/wiki
-
-### Installation
-
-```bash
-# Clone repository
-git clone https://github.com/yourusername/worksheet-splitter.git
-cd worksheet-splitter
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Download trained model (you'll need to add this)
-# Place best.pt in the backend/ folder
-```
-
-### Running Locally
-
-```bash
-# Start backend
-cd backend
-python main.py
-
-# Open browser
-open http://localhost:8000
-```
-
-## 📁 Project Structure
+## Project Structure
 
 ```
-worksheet-splitter/
+ExamCrop/
 ├── backend/
-│   ├── main.py              # FastAPI server
-│   ├── split_pdf.py         # Core splitting logic
-│   ├── best.pt              # Trained YOLOv26 model (not in git)
-│   └── requirements.txt     # Python dependencies
+│   ├── main.py          # FastAPI app, endpoints, R2, PocketBase
+│   ├── split_pdf.py     # YOLO inference pipeline
+│   ├── best.pt          # Model weights (not committed)
+│   └── requirements.txt
 ├── frontend/
-│   └── index.html          # Web interface
-├── .gitignore
-└── README.md
+│   ├── index.html
+│   ├── script.js
+│   ├── styles.css
+│   ├── bank.html        # Question bank UI
+│   ├── auth.js
+│   └── pricing.html
+└── training/
+    ├── dataset.yaml
+    ├── train/
+    │   ├── images/
+    │   └── labels/
+    └── val/
+        ├── images/
+        └── labels/
 ```
 
-## 🎯 Training Your Own Model
+## Local Development
 
-See [TRAINING.md](TRAINING.md) for detailed instructions on:
-- Annotating your worksheets
-- Training YOLOv26 on Google Colab
-- Deploying your custom model
-
-## 🚀 Deployment
-
-### Option 1: Render.com (Recommended - Free Tier)
-
-**Backend:**
-1. Create account on [render.com](https://render.com)
-2. New Web Service
-3. Connect GitHub repo
-4. Configure:
-   - **Build Command:** `pip install -r backend/requirements.txt`
-   - **Start Command:** `cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT`
-   - **Root Directory:** `backend`
-5. Add environment variable: `PORT=8000`
-6. Deploy!
-
-**Frontend:**
-1. New Static Site
-2. Connect same GitHub repo
-3. Configure:
-   - **Build Command:** (leave empty)
-   - **Publish Directory:** `frontend`
-4. Update `index.html` with your backend URL
-
-### Option 2: Railway.app
-
-Similar to Render, free tier available.
-
-### Option 3: DigitalOcean App Platform
-
-$5/month, more reliable than free tiers.
-
-## ⚙️ Configuration
-
-Edit `backend/main.py`:
-
-```python
-MAX_REQUESTS_PER_HOUR = 10    # Rate limit
-MAX_FILE_SIZE_MB = 20         # File size limit
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8080
 ```
 
-## 🔒 Security Notes
+Requires a `.env` file inside `backend/` with:
 
-- ✅ No API keys needed (YOLO runs locally)
-- ✅ Rate limiting enabled
-- ✅ File size limits enforced
-- ✅ No data stored after processing
-- ⚠️ Don't commit `best.pt` to git (too large)
-- ⚠️ Don't commit training data
+```
+R2_ACCOUNT_ID=
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_BUCKET_NAME=
+POCKETBASE_EMAIL=
+POCKETBASE_PASSWORD=
+```
 
-## 📊 Model Performance
+## Training
 
-- **mAP50:** 92.9%
-- **Precision:** 85.7%
-- **Recall:** 88.3%
-- **Training:** 100 epochs on custom dataset
+Training runs on Google Colab. To retrain:
 
-## 🐛 Troubleshooting
+1. Annotate pages using [makesense.ai](https://makesense.ai) — one class: `question`
+2. Place images in `training/train/images/` and labels in `training/train/labels/`
+3. Zip the training folder with current weights:
+```bash
+zip -r training_package.zip training/ backend/best.pt
+```
+4. Upload to Google Drive and run the Colab notebook
 
-**"Model not found" error:**
-- Make sure `best.pt` is in `backend/` folder
-- Re-train or download the model
+## Supported Formats
 
-**Rate limit errors:**
-- Wait 1 hour or increase `MAX_REQUESTS_PER_HOUR`
+PDF, JPG, PNG, HEIC — max 20MB, max 20 pages
 
-**Large files failing:**
-- Increase `MAX_FILE_SIZE_MB` if you have resources
-- Or split your PDF into smaller chunks
+## Curricula
 
-## 📝 License
-
-MIT License - feel free to use for personal or commercial projects.
-
-## 🙏 Acknowledgments
-
-- Built with [Ultralytics YOLOv26](https://github.com/ultralytics/ultralytics)
-- PDF processing: [PyMuPDF](https://pymupdf.readthedocs.io/)
-- OCR: [Tesseract](https://github.com/tesseract-ocr/tesseract)
+IGCSE, Edexcel, SAT, IB, Thanaweya Amma

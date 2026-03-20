@@ -50,3 +50,5 @@ output/
 .AppleDouble
 .LSOverride
 
+training_run1/
+requirements-local.txt
