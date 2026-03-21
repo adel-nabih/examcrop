@@ -1238,7 +1238,83 @@ async def update_question(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ── Poll tagging status ───────────────────────────────────────────────────────
+# ── User profile stats ────────────────────────────────────────────────────────
+
+@app.get("/api/me")
+async def get_me(user: dict = Depends(get_current_user)):
+    """Return basic profile info and usage stats for the logged-in user."""
+    try:
+        pb.admins.auth_with_password(POCKETBASE_EMAIL, POCKETBASE_PASSWORD)
+
+        # Questions saved
+        q_result = pb.collection("questions").get_list(1, 1, {
+            "filter": f'user = "{user["id"]}"',
+        })
+
+        # Papers split — count distinct upload_ids from questions collection
+        # Fetch enough to get all unique upload_ids (max 500 per page is fine for now)
+        uploads_result = pb.collection("questions").get_list(1, 500, {
+            "filter": f'user = "{user["id"]}"',
+            "fields": "upload_id",
+        })
+        unique_uploads = len({
+            (vars(r) if not isinstance(r, dict) else r).get("upload_id")
+            for r in uploads_result.items
+            if (vars(r) if not isinstance(r, dict) else r).get("upload_id")
+        })
+
+        return {
+            "id":              user["id"],
+            "email":           user["email"],
+            "questions_saved": q_result.total_items,
+            "uploads_done":    unique_uploads,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Update profile ────────────────────────────────────────────────────────────
+
+@app.patch("/api/me")
+async def update_me(
+    request: dict,
+    user: dict = Depends(get_current_user),
+):
+    """Update name and/or password for the logged-in user."""
+    import requests as _requests
+    token = user["token"]
+    allowed = {}
+    if "name" in request:
+        allowed["name"] = request["name"].strip()
+    if "oldPassword" in request and "newPassword" in request:
+        allowed["oldPassword"]        = request["oldPassword"]
+        allowed["password"]           = request["newPassword"]
+        allowed["passwordConfirm"]    = request["newPassword"]
+    if not allowed:
+        raise HTTPException(status_code=400, detail="Nothing to update.")
+    try:
+        res = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: _requests.patch(
+                f"{POCKETBASE_URL}/api/collections/users/records/{user['id']}",
+                headers={"Authorization": token, "Content-Type": "application/json"},
+                json=allowed,
+                timeout=10,
+            )
+        )
+        if res.status_code == 400:
+            data = res.json()
+            raise HTTPException(status_code=400, detail=data.get("message", "Update failed."))
+        if not res.ok:
+            raise HTTPException(status_code=res.status_code, detail="Update failed.")
+        return {"status": "updated"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 
 @app.post("/api/questions/tagging-status")
 async def get_tagging_status(
@@ -1368,29 +1444,39 @@ async def download_questions(
     try:
         pb.admins.auth_with_password(POCKETBASE_EMAIL, POCKETBASE_PASSWORD)
 
-        # Verify ownership and collect r2_keys in parallel
-        def fetch_record(qid):
-            rec = pb.collection("questions").get_one(qid)
-            return vars(rec) if not isinstance(rec, dict) else rec
+        # Fetch all records in one PocketBase query — no threading, PB client isn't thread-safe
+        id_filter = " || ".join(f'id = "{qid}"' for qid in ids)
+        result = pb.collection("questions").get_list(1, len(ids), {
+            "filter": f'user = "{user["id"]}" && ({id_filter})',
+        })
+        records = [vars(r) if not isinstance(r, dict) else r for r in result.items]
 
-        with ThreadPoolExecutor(max_workers=8) as pool:
-            records = list(pool.map(fetch_record, ids))
+        if len(records) != len(ids):
+            # Some IDs not found or not owned by user
+            found_ids = {r.get("id") for r in records}
+            missing   = [qid for qid in ids if qid not in found_ids]
+            raise HTTPException(status_code=403, detail=f"Questions not found or not yours: {missing}")
 
-        for rec in records:
-            if rec.get("user") != user["id"]:
-                raise HTTPException(status_code=403, detail="Not your question.")
-
-        # Fetch PDFs from R2 in parallel
+        # Fetch PDFs from R2 in parallel — boto3 is thread-safe
         def fetch_pdf(rec):
             key = rec.get("r2_key", "")
-            obj = r2_client.get_object(Bucket=R2_BUCKET_NAME, Key=key)
+            if not key:
+                raise ValueError(f"No r2_key for record {rec.get('id')}")
+            obj       = r2_client.get_object(Bucket=R2_BUCKET_NAME, Key=key)
+            source    = Path(rec.get("source_pdf", "question")).stem[:30]
+            q_num     = rec.get("q_number", "?")
+            unique_id = rec.get("id", "")[:6]
+            filename  = f"{source}_Q{q_num}_{unique_id}.pdf"
             return {
-                "filename": f"Q{rec.get('q_number','?')}_{Path(key).name}",
+                "filename": filename,
                 "data":     obj["Body"].read(),
             }
 
         with ThreadPoolExecutor(max_workers=8) as pool:
-            pdf_files = list(pool.map(fetch_pdf, records))
+            futures  = {pool.submit(fetch_pdf, rec): rec for rec in records}
+            pdf_files = []
+            for future in futures:
+                pdf_files.append(future.result())  # raises on failure — no silent drops
 
         # Build ZIP in memory
         zip_buffer = io.BytesIO()
@@ -1416,12 +1502,14 @@ async def download_questions(
 
 
 CLEAN_URL_MAP = {
-    "pricing":   "pricing.html",
-    "igcse":     "igcse.html",
-    "ib":        "ib.html",
-    "sat":       "sat.html",
-    "thanaweya": "thanaweya.html",
-    "bank":      "bank.html",
+    "pricing":    "pricing.html",
+    "igcse":      "igcse.html",
+    "ib":         "ib.html",
+    "sat":        "sat.html",
+    "thanaweya":  "thanaweya.html",
+    "bank":       "bank.html",
+    "settings":   "settings.html",
+    "worksheets": "worksheets.html",
 }
 
 @app.get("/")

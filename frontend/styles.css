@@ -1696,3 +1696,21 @@ input[type="file"] { display: none; }
     .hero-cta-group { flex-direction: column; align-items: flex-start; }
     .btn-hero-primary { width: 100%; justify-content: center; }
 }
+/* ── Logged-in nav tool links ──────────────────────────────────────────── */
+.nav-tool-link {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 14px;
+    padding: 7px 12px;
+    border-radius: 10px;
+    transition: color var(--transition), background var(--transition);
+}
+
+.nav-tool-link:hover { color: var(--text); background: var(--surface-2); }
+
+.nav-tool-link.active {
+    color: var(--brand);
+    background: var(--brand-light);
+    font-weight: 600;
+}

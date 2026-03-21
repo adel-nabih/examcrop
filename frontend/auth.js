@@ -122,51 +122,121 @@ function _pbError(data) {
 // ── UI State ─────────────────────────────────────────────────────────────────
 
 function _onAuthChange(user) {
-    const authBtn  = document.getElementById('authNavBtn');
-    const userMenu = document.getElementById('userNavMenu');
-
-    if (!authBtn) return;
-
-    if (user) {
-        authBtn.textContent   = 'My Bank';
-        authBtn.href          = '/bank';
-        authBtn.onclick       = null;
-        authBtn.style.display = '';
-        if (userMenu) userMenu.style.display = '';
-    } else {
-        authBtn.textContent = 'Log In';
-        authBtn.href        = '#';
-        authBtn.onclick     = (e) => { e.preventDefault(); showAuthModal('login'); };
-        if (userMenu) userMenu.style.display = 'none';
-    }
+    _updateDesktopNav(user);
+    _updateMobileNav(user);
 
     // ── Page-specific callback (e.g. bank.html) ──
     if (typeof window._bankAuthCallback === 'function') {
         window._bankAuthCallback(user);
     }
+}
 
-    // ── Mobile menu auth link ──
-    const mobileAuthBtn    = document.getElementById('mobileAuthBtn');
-    const mobileLogoutLink = document.getElementById('mobileLogoutBtn');
+function _updateDesktopNav(user) {
+    const navLinks = document.querySelector('.nav-links');
+    if (!navLinks) return;
 
-    if (mobileAuthBtn) {
-        if (user) {
-            mobileAuthBtn.textContent = 'My Bank';
-            mobileAuthBtn.href        = '/bank';
-            mobileAuthBtn.onclick     = null;
-            if (mobileLogoutLink) mobileLogoutLink.style.display = '';
-        } else {
-            mobileAuthBtn.textContent = 'Log In';
-            mobileAuthBtn.href        = '#';
-            mobileAuthBtn.onclick     = (e) => {
-                e.preventDefault();
-                document.getElementById('hamburger')?.classList.remove('open');
-                document.getElementById('mobileMenu')?.classList.remove('open');
-                showAuthModal('login');
-            };
-            if (mobileLogoutLink) mobileLogoutLink.style.display = 'none';
+    if (user) {
+        const name = user.name || user.email?.split('@')[0] || 'Account';
+        navLinks.innerHTML = `
+            <a href="/bank"       class="nav-tool-link" id="navBank">My Bank</a>
+            <a href="/worksheets" class="nav-tool-link" id="navWorksheets">My Worksheets</a>
+            <a href="/settings"   class="nav-tool-link" id="navSettings">Settings</a>
+            <a href="/bank" class="nav-auth-btn" id="authNavBtn">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.7"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                ${_escHtml(name)}
+            </a>
+            <div class="nav-user-menu" id="userNavMenu">
+                <a href="#" class="nav-logout-link" id="logoutBtn">Log out</a>
+            </div>
+        `;
+        // Re-bind logout
+        document.getElementById('logoutBtn')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            Auth.logout();
+            window.location.href = '/';
+        });
+        // Highlight active page
+        const path = window.location.pathname;
+        if (path.startsWith('/bank'))        document.getElementById('navBank')?.classList.add('active');
+        if (path.startsWith('/worksheets'))  document.getElementById('navWorksheets')?.classList.add('active');
+        if (path.startsWith('/settings'))    document.getElementById('navSettings')?.classList.add('active');
+    } else {
+        navLinks.innerHTML = `
+            <div class="nav-dropdown" id="curriculumDropdown">
+                <button class="nav-dropdown-trigger" id="curriculumTrigger">
+                    Curriculums
+                    <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                </button>
+                <div class="dropdown-menu">
+                    <a href="/igcse"     class="dropdown-item">IGCSE</a>
+                    <a href="/sat"       class="dropdown-item">SAT</a>
+                    <a href="/thanaweya" class="dropdown-item">الثانوية العامة</a>
+                </div>
+            </div>
+            <a href="/pricing">Pricing</a>
+            <a href="#" class="nav-auth-btn" id="authNavBtn">Log In</a>
+            <div class="nav-user-menu" id="userNavMenu" style="display:none">
+                <a href="#" class="nav-logout-link" id="logoutBtn">Log out</a>
+            </div>
+        `;
+        // Re-bind curriculum dropdown
+        const trigger  = document.getElementById('curriculumTrigger');
+        const dropdown = document.getElementById('curriculumDropdown');
+        if (trigger && dropdown) {
+            trigger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                dropdown.classList.toggle('open');
+            });
         }
+        // Re-bind login button
+        document.getElementById('authNavBtn')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            showAuthModal('login');
+        });
+        // Re-bind logout
+        document.getElementById('logoutBtn')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            Auth.logout();
+            window.location.href = '/';
+        });
     }
+}
+
+function _updateMobileNav(user) {
+    const mobileMenu = document.getElementById('mobileMenu');
+    if (!mobileMenu) return;
+
+    if (user) {
+        const name = user.name || user.email?.split('@')[0] || 'Account';
+        mobileMenu.innerHTML = `
+            <a href="/bank"       class="mobile-nav-link">My Bank</a>
+            <a href="/worksheets" class="mobile-nav-link">My Worksheets</a>
+            <a href="/settings"   class="mobile-nav-link">Settings</a>
+            <a href="#" class="mobile-logout-link" id="mobileLogoutBtn"
+               onclick="event.preventDefault(); Auth.logout(); window.location.href='/'">Log out</a>
+        `;
+    } else {
+        mobileMenu.innerHTML = `
+            <span class="mobile-section-label">Curriculums</span>
+            <a href="/igcse"     class="mobile-nav-link mobile-sub-link">IGCSE</a>
+            <a href="/sat"       class="mobile-nav-link mobile-sub-link">SAT</a>
+            <a href="/thanaweya" class="mobile-nav-link mobile-sub-link">الثانوية العامة</a>
+            <a href="/pricing"   class="mobile-nav-link">Pricing</a>
+            <a href="#" class="mobile-nav-link mobile-auth-link" id="mobileAuthBtn">Log In</a>
+        `;
+        document.getElementById('mobileAuthBtn')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.getElementById('hamburger')?.classList.remove('open');
+            document.getElementById('mobileMenu')?.classList.remove('open');
+            showAuthModal('login');
+        });
+    }
+}
+
+function _escHtml(str) {
+    return str.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 // ── Auth Modal ───────────────────────────────────────────────────────────────

@@ -1030,15 +1030,225 @@
         .curriculum-pill:hover { border-color: var(--brand); color: var(--brand); background: var(--brand-light); }
         .curriculum-pill.active { background: var(--brand); color: white; border-color: var(--brand); }
 
+        /* ── Mobile filter drawer ── */
+        .filter-drawer-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(20,18,16,0.6);
+            z-index: 1100;
+            backdrop-filter: blur(4px);
+        }
+
+        .filter-drawer-overlay.show { display: block; }
+
+        .filter-drawer {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            background: #1A1812;
+            border-radius: 20px 20px 0 0;
+            padding: 0 0 env(safe-area-inset-bottom, 16px);
+            z-index: 1101;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.32,0.72,0,1);
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .filter-drawer.show { transform: translateY(0); }
+
+        .filter-drawer-handle {
+            width: 36px; height: 4px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+            margin: 12px auto 0;
+            flex-shrink: 0;
+        }
+
+        .filter-drawer-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 20px 10px;
+            flex-shrink: 0;
+        }
+
+        .filter-drawer-title {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 16px;
+            font-weight: 800;
+            color: white;
+            letter-spacing: -0.3px;
+        }
+
+        .filter-drawer-clear {
+            font-size: 13px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.45);
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            padding: 4px 0;
+            transition: color 0.15s;
+        }
+
+        .filter-drawer-clear:hover { color: rgba(255,255,255,0.75); }
+
+        .filter-drawer-body {
+            overflow-y: auto;
+            padding: 4px 14px 24px;
+            flex: 1;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .filter-drawer-section { margin-bottom: 20px; }
+
+        .filter-drawer-section-label {
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.25);
+            padding: 0 6px;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .filter-drawer-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding: 0 2px;
+        }
+
+        .filter-drawer-pill {
+            padding: 8px 14px;
+            border-radius: 100px;
+            font-size: 13px;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
+            border: 1.5px solid rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.05);
+            color: rgba(255,255,255,0.55);
+            cursor: pointer;
+            transition: all 0.15s;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .filter-drawer-pill:active { transform: scale(0.95); }
+        .filter-drawer-pill.active { background: var(--brand); border-color: var(--brand); color: white; }
+
+        .filter-btn-mobile {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 14px;
+            background: var(--surface);
+            border: 1.5px solid #C4B99A;
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
+            color: var(--text-muted);
+            cursor: pointer;
+            box-shadow: var(--shadow-sm);
+            white-space: nowrap;
+            transition: all 0.15s;
+            flex-shrink: 0;
+        }
+
+        .filter-btn-mobile.has-filters {
+            background: var(--brand-light);
+            border-color: rgba(61,107,53,0.4);
+            color: var(--brand);
+        }
+
         /* ── Mobile ── */
         @media (max-width: 768px) {
             .bank-sidebar { display: none; }
-            .bank-main { padding: 20px 16px 60px; }
-            .question-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
-            .bank-title { font-size: 22px; }
-            .q-modal-body { flex-direction: column; }
-            .q-modal-tags { width: 100%; border-right: none; border-top: 1.5px solid #C4B99A; }
-            .q-modal-pdf { min-height: 280px; }
+            .bank-main { padding: 16px 14px 100px; }
+            .question-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+            .bank-title { font-size: 20px; }
+            .bank-header { margin-bottom: 16px; }
+            .bank-actions { gap: 8px; }
+            .bank-btn-primary { padding: 9px 14px; font-size: 13px; }
+            .bank-btn-secondary { padding: 9px 12px; font-size: 13px; }
+
+            /* Show filter button, hide search on its own row */
+            .filter-btn-mobile { display: flex; }
+
+            /* Search row */
+            .search-row {
+                display: flex;
+                gap: 8px;
+                align-items: center;
+                margin-bottom: 12px;
+            }
+
+            .search-wrap { margin-bottom: 0; flex: 1; }
+
+            /* Modal: full screen bottom sheet on mobile */
+            .q-modal-overlay { padding: 0; align-items: flex-end; }
+
+            .q-modal {
+                max-width: 100%;
+                max-height: 95vh;
+                border-radius: 20px 20px 0 0;
+                border-bottom: none;
+                animation: modalInMobile 0.3s cubic-bezier(0.32,0.72,0,1) both;
+            }
+
+            @keyframes modalInMobile {
+                from { transform: translateY(100%); }
+                to   { transform: translateY(0); }
+            }
+
+            /* Stack PDF above tags, both scrollable independently */
+            .q-modal-body {
+                flex-direction: column;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .q-modal-pdf {
+                min-height: 240px;
+                max-height: 45vh;
+                border-right: none;
+                border-bottom: 1.5px solid #C4B99A;
+                padding: 16px;
+                overflow-y: auto;
+            }
+
+            .q-modal-tags {
+                width: 100%;
+                overflow-y: visible; /* let parent scroll */
+                padding: 16px 16px 40px;
+            }
+
+            /* Card delete always visible on mobile (no hover) */
+            .card-delete { display: flex !important; opacity: 0.75; }
+            .question-card.selectable .card-delete { display: none !important; }
+
+            /* Bigger tap targets on cards */
+            .card-footer { padding: 10px 12px 14px; }
+
+            /* Bulk bar — compact, fits content, above iOS home indicator */
+            .bulk-bar {
+                bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+                width: auto;
+                max-width: calc(100vw - 32px);
+                padding: 8px 8px 8px 14px;
+                gap: 6px;
+            }
+
+            .bulk-count { min-width: unset; font-size: 12px; }
+            .bulk-btn { padding: 8px 12px; font-size: 12px; }
+            .bulk-select-all { display: none; }
+
+            /* Pagination smaller */
+            .page-btn { padding: 8px 12px; font-size: 13px; }
         }
     </style>
 </head>
@@ -1154,10 +1364,16 @@
             </div>
         </div>
 
-        <div class="search-wrap" id="searchWrap">
-            <span class="search-icon">🔍</span>
-            <input class="search-input" id="searchInput" type="text" placeholder="Search by topic, keyword, or filename…" autocomplete="off">
-            <button class="search-clear" id="searchClear" onclick="clearSearch()" title="Clear">×</button>
+        <div class="search-row">
+            <div class="search-wrap" id="searchWrap">
+                <span class="search-icon">🔍</span>
+                <input class="search-input" id="searchInput" type="text" placeholder="Search topics, keywords, filename…" autocomplete="off">
+                <button class="search-clear" id="searchClear" onclick="clearSearch()" title="Clear">×</button>
+            </div>
+            <button class="filter-btn-mobile" id="filterBtnMobile" onclick="openFilterDrawer()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+                Filters
+            </button>
         </div>
 
         <div class="active-filters" id="activeFilters"></div>
@@ -1170,6 +1386,34 @@
         </div>
         <div class="pagination" id="pagination" style="display:none"></div>
     </main>
+</div>
+
+<!-- Mobile filter drawer -->
+<div class="filter-drawer-overlay" id="filterDrawerOverlay" onclick="closeFilterDrawer()"></div>
+<div class="filter-drawer" id="filterDrawer">
+    <div class="filter-drawer-handle"></div>
+    <div class="filter-drawer-header">
+        <span class="filter-drawer-title">Filters</span>
+        <button class="filter-drawer-clear" onclick="clearAllFilters()">Clear all</button>
+    </div>
+    <div class="filter-drawer-body">
+        <div class="filter-drawer-section">
+            <span class="filter-drawer-section-label">Subject</span>
+            <div class="filter-drawer-pills" id="drawerSubjectPills"></div>
+        </div>
+        <div class="filter-drawer-section">
+            <span class="filter-drawer-section-label">Curriculum</span>
+            <div class="filter-drawer-pills" id="drawerCurriculumPills"></div>
+        </div>
+        <div class="filter-drawer-section">
+            <span class="filter-drawer-section-label">Difficulty</span>
+            <div class="filter-drawer-pills" id="drawerDifficultyPills"></div>
+        </div>
+        <div class="filter-drawer-section">
+            <span class="filter-drawer-section-label">Type</span>
+            <div class="filter-drawer-pills" id="drawerTypePills"></div>
+        </div>
+    </div>
 </div>
 
 <!-- Question Detail Modal -->
@@ -1381,14 +1625,15 @@ function renderChips() {
         difficulty: v => v.charAt(0).toUpperCase() + v.slice(1),
         q_type: v => ({ mcq:'MCQ', short_answer:'Short Answer', structured:'Structured', essay:'Essay', data_response:'Data Response' }[v] || v),
     };
+    let activeCount = 0;
     Object.entries(currentFilters).forEach(([key, val]) => {
         if (key === 'search' || !val) return;
+        activeCount++;
         const chip = document.createElement('div');
         chip.className = 'filter-chip';
         chip.innerHTML = `${labels[key]?.(val) || val} <span class="filter-chip-x">×</span>`;
         chip.addEventListener('click', () => {
             delete currentFilters[key];
-            // Reset matching sidebar btn to "All"
             const allBtn = document.querySelector(`.filter-btn[data-key="${key}"][data-val=""]`);
             if (allBtn) {
                 document.querySelectorAll(`.filter-btn[data-key="${key}"]`).forEach(b => b.classList.remove('active'));
@@ -1399,6 +1644,16 @@ function renderChips() {
         });
         container.appendChild(chip);
     });
+
+    // Mobile filter button badge
+    const mobileBtn = document.getElementById('filterBtnMobile');
+    if (mobileBtn) {
+        mobileBtn.classList.toggle('has-filters', activeCount > 0);
+        mobileBtn.innerHTML = `
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+            Filters${activeCount > 0 ? ` (${activeCount})` : ''}
+        `;
+    }
 }
 
 // ── Signed URL cache ───────────────────────────────────────────────────────
@@ -2135,6 +2390,100 @@ async function bulkDelete() {
     setTimeout(() => loadQuestions(currentPage), 250);
 }
 
+// ── Mobile filter drawer ───────────────────────────────────────────────────
+function openFilterDrawer() {
+    _populateDrawer();
+    document.getElementById('filterDrawerOverlay').classList.add('show');
+    document.getElementById('filterDrawer').classList.add('show');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeFilterDrawer() {
+    document.getElementById('filterDrawerOverlay').classList.remove('show');
+    document.getElementById('filterDrawer').classList.remove('show');
+    document.body.style.overflow = '';
+}
+
+function clearAllFilters() {
+    const filterKeys = ['subject', 'curriculum', 'difficulty', 'q_type'];
+    filterKeys.forEach(key => {
+        delete currentFilters[key];
+        const allBtn = document.querySelector(`.filter-btn[data-key="${key}"][data-val=""]`);
+        if (allBtn) {
+            document.querySelectorAll(`.filter-btn[data-key="${key}"]`).forEach(b => b.classList.remove('active'));
+            allBtn.classList.add('active');
+        }
+    });
+    _populateDrawer();
+    renderChips();
+    loadQuestions(1);
+}
+
+function _populateDrawer() {
+    const groups = [
+        {
+            id: 'drawerSubjectPills',
+            key: 'subject',
+            options: [{ val: '', label: 'All' }, ...Object.keys(taxonomy).map(s => ({ val: s, label: s }))],
+        },
+        {
+            id: 'drawerCurriculumPills',
+            key: 'curriculum',
+            options: [{ val: '', label: 'All' }, ...CURRICULA],
+        },
+        {
+            id: 'drawerDifficultyPills',
+            key: 'difficulty',
+            options: [
+                { val: '', label: 'All' },
+                { val: 'easy', label: 'Easy' },
+                { val: 'medium', label: 'Medium' },
+                { val: 'hard', label: 'Hard' },
+            ],
+        },
+        {
+            id: 'drawerTypePills',
+            key: 'q_type',
+            options: [
+                { val: '', label: 'All' },
+                { val: 'mcq', label: 'MCQ' },
+                { val: 'short_answer', label: 'Short Answer' },
+                { val: 'structured', label: 'Structured' },
+                { val: 'essay', label: 'Essay' },
+                { val: 'data_response', label: 'Data Response' },
+            ],
+        },
+    ];
+
+    groups.forEach(({ id, key, options }) => {
+        const container = document.getElementById(id);
+        if (!container) return;
+        container.innerHTML = options.map(({ val, label }) => `
+            <button class="filter-drawer-pill${currentFilters[key] === val || (!currentFilters[key] && val === '') ? ' active' : ''}"
+                onclick="_drawerSetFilter('${key}','${val}',this)">
+                ${label}
+            </button>
+        `).join('');
+    });
+}
+
+function _drawerSetFilter(key, val, btn) {
+    // Update drawer pill active state
+    btn.closest('.filter-drawer-pills').querySelectorAll('.filter-drawer-pill').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+
+    // Sync sidebar buttons
+    document.querySelectorAll(`.filter-btn[data-key="${key}"]`).forEach(b => b.classList.remove('active'));
+    const sidebarBtn = document.querySelector(`.filter-btn[data-key="${key}"][data-val="${val}"]`);
+    if (sidebarBtn) sidebarBtn.classList.add('active');
+
+    if (val) { currentFilters[key] = val; } else { delete currentFilters[key]; }
+
+    renderChips();
+    loadQuestions(1);
+    // Keep drawer open so user can stack filters
+}
+
 // ── Tagging status polling ─────────────────────────────────────────────────
 let _pollTimer   = null;
 const _POLL_MS   = 30_000;
@@ -2192,6 +2541,7 @@ async function _pollTaggingStatus() {
 // ── Keyboard ───────────────────────────────────────────────────────────────
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+        if (document.getElementById('filterDrawer').classList.contains('show')) { closeFilterDrawer(); return; }
         if (_selectMode) { exitSelectMode(); return; }
         closeQModal();
     }
