@@ -349,12 +349,17 @@ function showViewer(mode = 'results') {
         viewerTitle.textContent = 'Questions Preview';
         currentQuestionIndex = 0;
         updateResultsViewerUI();
+        // Trigger feedback toast after user has had time to review
+        if (window._lastUploadId) {
+            showFeedbackToast(window._lastUploadId);
+        }
     }
     updateSaveBankBtn();
 }
 
 function hideViewer() {
     viewerOverlay.classList.remove('show');
+    hideToast();
 }
 
 function updateOriginalViewerUI() {
@@ -756,7 +761,233 @@ if (saveBankBtn) {
     });
 }
 
-// Split Button Handler
+// ── Split feedback toast ──────────────────────────────────────────────────────
+
+// Inject toast styles once
+(function injectToastStyles() {
+    const style = document.createElement('style');
+    style.textContent = `
+        #splitFeedbackToast {
+            position: fixed;
+            bottom: 32px;
+            left: 50%;
+            transform: translateX(-50%) translateY(120px);
+            background: #1A1812;
+            border: 1.5px solid rgba(196,185,154,0.35);
+            border-radius: 20px;
+            padding: 18px 22px;
+            z-index: 2000;
+            box-shadow: 0 12px 48px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.3);
+            transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1), opacity 0.25s;
+            opacity: 0;
+            min-width: 340px;
+            max-width: calc(100vw - 40px);
+            font-family: 'Inter', sans-serif;
+        }
+        #splitFeedbackToast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+        .toast-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .toast-label {
+            flex: 1;
+            font-size: 15px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.92);
+            white-space: nowrap;
+        }
+        .toast-thumb {
+            background: rgba(255,255,255,0.1);
+            border: 1.5px solid rgba(255,255,255,0.15);
+            border-radius: 10px;
+            width: 44px; height: 44px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px;
+            cursor: pointer;
+            transition: background 0.15s, transform 0.15s;
+            flex-shrink: 0;
+        }
+        .toast-thumb:hover { background: rgba(255,255,255,0.2); transform: scale(1.12); }
+        .toast-dismiss {
+            background: none; border: none;
+            color: rgba(255,255,255,0.35);
+            font-size: 20px; cursor: pointer;
+            padding: 0 2px; line-height: 1;
+            transition: color 0.15s;
+            flex-shrink: 0;
+        }
+        .toast-dismiss:hover { color: rgba(255,255,255,0.7); }
+        .toast-expand {
+            margin-top: 14px;
+            padding-top: 14px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            display: none;
+        }
+        .toast-expand.show { display: block; }
+        .toast-select {
+            width: 100%;
+            padding: 10px 12px;
+            background: rgba(255,255,255,0.07);
+            border: 1px solid rgba(255,255,255,0.14);
+            border-radius: 10px;
+            color: rgba(255,255,255,0.85);
+            font-size: 14px;
+            font-family: 'Inter', sans-serif;
+            outline: none;
+            margin-bottom: 10px;
+            cursor: pointer;
+            appearance: none;
+        }
+        .toast-select option { background: #1A1812; }
+        .toast-textarea {
+            width: 100%;
+            padding: 10px 12px;
+            background: rgba(255,255,255,0.07);
+            border: 1px solid rgba(255,255,255,0.14);
+            border-radius: 10px;
+            color: rgba(255,255,255,0.85);
+            font-size: 14px;
+            font-family: 'Inter', sans-serif;
+            outline: none;
+            resize: none;
+            height: 68px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+        }
+        .toast-textarea::placeholder { color: rgba(255,255,255,0.3); }
+        .toast-submit {
+            width: 100%;
+            padding: 11px;
+            background: #3D6B35;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 700;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            cursor: pointer;
+            transition: background 0.15s;
+            letter-spacing: -0.1px;
+        }
+        .toast-submit:hover { background: #2E5228; }
+        .toast-thanks {
+            text-align: center;
+            font-size: 14px;
+            color: rgba(255,255,255,0.65);
+            padding: 4px 0 2px;
+            display: none;
+        }
+    `;
+    document.head.appendChild(style);
+})();
+
+// Build toast DOM once — deferred until DOM is ready
+function _buildToast() {
+    if (document.getElementById('splitFeedbackToast')) return;
+    const el = document.createElement('div');
+    el.id = 'splitFeedbackToast';
+    el.innerHTML = `
+        <div class="toast-row">
+            <span class="toast-label">How did the split look?</span>
+            <button class="toast-thumb" id="toastThumbUp" title="Looks good">👍</button>
+            <button class="toast-thumb" id="toastThumbDown" title="Something's off">👎</button>
+            <button class="toast-dismiss" id="toastDismiss" title="Dismiss">×</button>
+        </div>
+        <div class="toast-expand" id="toastExpand">
+            <select class="toast-select" id="toastSelect">
+                <option value="">What went wrong?</option>
+                <option value="missed_question">Missed a question</option>
+                <option value="wrong_split">Split in the wrong place</option>
+                <option value="combined_questions">Combined two questions</option>
+                <option value="extra_detection">Detected something that isn't a question</option>
+                <option value="other">Other</option>
+            </select>
+            <textarea class="toast-textarea" id="toastTextarea" placeholder="Any extra detail? (optional)"></textarea>
+            <button class="toast-submit" id="toastSubmit">Send feedback</button>
+        </div>
+        <div class="toast-thanks" id="toastThanks">Thanks — this helps us improve 🙏</div>
+    `;
+    document.body.appendChild(el);
+
+    document.getElementById('toastDismiss').addEventListener('click', hideToast);
+
+    document.getElementById('toastThumbUp').addEventListener('click', () => {
+        submitRating('good', '');
+        showToastThanks();
+    });
+
+    document.getElementById('toastThumbDown').addEventListener('click', () => {
+        document.getElementById('toastExpand').classList.add('show');
+        document.getElementById('toastThumbUp').style.display   = 'none';
+        document.getElementById('toastThumbDown').style.display = 'none';
+    });
+
+    document.getElementById('toastSubmit').addEventListener('click', () => {
+        const select   = document.getElementById('toastSelect').value;
+        const text     = document.getElementById('toastTextarea').value.trim();
+        const feedback = [select, text].filter(Boolean).join(' — ');
+        submitRating('bad', feedback);
+        showToastThanks();
+    });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _buildToast);
+} else {
+    _buildToast();
+}
+
+let _toastTimer      = null;
+let _toastUploadId   = null;
+let _toastShownFor   = null;
+
+function showFeedbackToast(uploadId) {
+    if (!uploadId || _toastShownFor === uploadId) return;
+    _toastShownFor = uploadId;
+    _toastUploadId = uploadId;
+
+    // Reset state
+    document.getElementById('toastExpand').classList.remove('show');
+    document.getElementById('toastThanks').style.display      = 'none';
+    document.getElementById('toastThumbUp').style.display     = '';
+    document.getElementById('toastThumbDown').style.display   = '';
+    document.getElementById('toastSelect').value              = '';
+    document.getElementById('toastTextarea').value            = '';
+
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => {
+        document.getElementById('splitFeedbackToast').classList.add('show');
+    }, 5000); // 5 seconds after viewer opens
+}
+
+function hideToast() {
+    clearTimeout(_toastTimer);
+    document.getElementById('splitFeedbackToast').classList.remove('show');
+}
+
+function showToastThanks() {
+    document.getElementById('toastExpand').classList.remove('show');
+    document.getElementById('toastThanks').style.display = 'block';
+    setTimeout(hideToast, 2500);
+}
+
+async function submitRating(rating, feedback) {
+    const uploadId = _toastUploadId;
+    if (!uploadId) return;
+    try {
+        await fetch(`${API_BASE}/api/uploads/${uploadId}/rating`, {
+            method:  'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ rating, feedback }),
+        });
+    } catch (e) {
+        console.error('Rating submit failed:', e);
+    }
+}
 splitBtn.addEventListener('click', async () => {
     if (!selectedFile) return;
 

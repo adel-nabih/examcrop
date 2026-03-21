@@ -1500,6 +1500,37 @@ async def download_questions(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ── Split quality rating ──────────────────────────────────────────────────────
+
+@app.patch("/api/uploads/{upload_id}/rating")
+async def rate_split(upload_id: str, request: dict):
+    """
+    Record a thumbs up/down rating on a split.
+    No auth required — anonymous users can rate too.
+    Body: {"rating": "good"|"bad", "feedback": "optional string"}
+    """
+    rating   = request.get("rating", "").strip()
+    feedback = request.get("feedback", "").strip()
+    if rating not in ("good", "bad"):
+        raise HTTPException(status_code=400, detail="rating must be 'good' or 'bad'.")
+    try:
+        pb.admins.auth_with_password(POCKETBASE_EMAIL, POCKETBASE_PASSWORD)
+        results = pb.collection("uploads").get_list(1, 1, {
+            "filter": f'upload_id = "{upload_id}"',
+        })
+        if not results.items:
+            raise HTTPException(status_code=404, detail="Upload not found.")
+        record_id = results.items[0].id
+        pb.collection("uploads").update(record_id, {
+            "split_rating":   rating,
+            "split_feedback": feedback,
+        })
+        return {"status": "ok"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 CLEAN_URL_MAP = {
     "pricing":    "pricing.html",
