@@ -3,7 +3,7 @@ FastAPI Backend for Worksheet Splitter - OPTIMIZED
 YOLOv26 Custom Model with Parallel Processing & Caching
 """
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Query
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Query, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,6 +25,10 @@ import asyncio
 import boto3
 from botocore.config import Config
 
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
 from pocketbase import PocketBase
 from contextlib import asynccontextmanager
 
@@ -39,6 +43,12 @@ load_dotenv()
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 IS_RAILWAY = os.environ.get("RAILWAY_ENVIRONMENT_NAME") is not None
+
+def _sanitize(value: str, max_len: int = 255) -> str:
+    """Strip, truncate, and remove characters that could break PocketBase filter strings."""
+    if not isinstance(value, str):
+        return ""
+    return value.strip().replace('"', '').replace("'", '').replace('\x00', '')[:max_len]
 
 if IS_RAILWAY:
     POCKETBASE_URL = "http://pocketbase.railway.internal:8080"
@@ -180,6 +190,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 origins = [
     "http://localhost:8000",
     "http://127.0.0.1:8000",
@@ -214,7 +228,9 @@ def read_root():
 
 @app.post("/split")
 @app.post("/api/split")
+@limiter.limit("10/hour")
 async def split_worksheet(
+    request: Request,
     file: UploadFile = File(...),
     dpi: int = 250,
     debug: bool = False,
@@ -251,15 +267,18 @@ async def split_worksheet(
 
     contents      = await file.read()
     file_size_mb  = len(contents) / (1024 * 1024)
+    file_ext      = Path(file.filename).suffix.lower()
 
-    if len(contents) > MAX_SIZE:
+    # Size check — skip for PDFs when a page range is selected,
+    # since the subset will be much smaller. Check subset size later instead.
+    is_pdf_with_page_selection = file_ext == '.pdf' and bool(pages)
+    if not is_pdf_with_page_selection and len(contents) > MAX_SIZE:
         raise HTTPException(
             status_code=413,
             detail=f"File too large ({file_size_mb:.1f}MB). Maximum file size is 20MB."
         )
 
     allowed_extensions = ['.jpg', '.jpeg', '.png', '.pdf', '.heic', '.heif']
-    file_ext = Path(file.filename).suffix.lower()
 
     if file_ext not in allowed_extensions:
         raise HTTPException(
@@ -303,25 +322,22 @@ async def split_worksheet(
                 page_count = len(doc)
                 doc.close()
 
-                if page_count > MAX_PAGES:
-                    raise HTTPException(
-                        status_code=413,
-                        detail=f"Your PDF has {page_count} pages. Maximum {MAX_PAGES} pages supported."
-                    )
-
                 # ── Page selection: extract subset into a new PDF ──────────
                 if pages:
                     try:
                         requested = [int(p.strip()) for p in pages.split(',') if p.strip()]
-                        # Validate all requested pages are in range
                         invalid = [p for p in requested if p < 1 or p > page_count]
                         if invalid:
                             raise HTTPException(
                                 status_code=400,
                                 detail=f"Page numbers out of range: {invalid}. PDF has {page_count} pages."
                             )
+                        if len(set(requested)) > MAX_PAGES:
+                            raise HTTPException(
+                                status_code=413,
+                                detail=f"You selected {len(set(requested))} pages. Maximum {MAX_PAGES} pages supported."
+                            )
 
-                        # Build a new PDF with only the selected pages
                         src_doc     = fitz.open(input_path)
                         subset_doc  = fitz.open()
                         for p in sorted(set(requested)):
@@ -332,6 +348,14 @@ async def split_worksheet(
                         subset_doc.save(subset_path, garbage=4, deflate=True)
                         subset_doc.close()
 
+                        # Check subset size
+                        subset_size = os.path.getsize(subset_path)
+                        if subset_size > MAX_SIZE:
+                            raise HTTPException(
+                                status_code=413,
+                                detail=f"Selected pages are too large ({subset_size/1024/1024:.1f}MB). Maximum is 20MB."
+                            )
+
                         input_path  = subset_path
                         page_count  = len(requested)
                         print(f"  → Page selection applied: {sorted(set(requested))} ({page_count} pages)")
@@ -339,6 +363,13 @@ async def split_worksheet(
                         raise
                     except Exception as e:
                         print(f"Warning: Could not apply page selection: {e}")
+                else:
+                    # No page selection — check full PDF page count
+                    if page_count > MAX_PAGES:
+                        raise HTTPException(
+                            status_code=413,
+                            detail=f"Your PDF has {page_count} pages. Maximum {MAX_PAGES} pages supported."
+                        )
                 # ─────────────────────────────────────────────────────────
 
                 print(f"\nProcessing: {file.filename} ({file_size_mb:.1f}MB, {page_count} pages)")
@@ -661,15 +692,16 @@ async def get_sample_file():
 
 
 @app.post("/api/feedback")
-async def collect_feedback(request: dict):
+@limiter.limit("20/hour")
+async def collect_feedback(request: Request, body: dict):
     """Collect user feedback, save to leads, and link email to upload record"""
     try:
-        email        = request.get('email', '')
-        comment      = request.get('comment', '')
-        timestamp    = request.get('timestamp', '')
-        upload_id    = request.get('upload_id', '')
-        is_returning = request.get('is_returning', False)
-        marketing    = request.get('marketing_opt_in', False)
+        email        = body.get('email', '')
+        comment      = body.get('comment', '')
+        timestamp    = body.get('timestamp', '')
+        upload_id    = body.get('upload_id', '')
+        is_returning = body.get('is_returning', False)
+        marketing    = body.get('marketing_opt_in', False)
 
         if not email and not comment:
             return {"status": "success", "message": "No data provided"}
@@ -1086,10 +1118,10 @@ async def save_questions(
     Reads metadata.json from R2 to get question count, then creates
     one questions record per question in PocketBase.
     """
-    upload_id   = request.get("upload_id", "").strip()
-    source_pdf  = request.get("source_pdf", "")
-    subject     = request.get("subject", "")
-    curriculum  = request.get("curriculum", "")
+    upload_id   = _sanitize(request.get("upload_id", ""), max_len=64)
+    source_pdf  = _sanitize(request.get("source_pdf", ""), max_len=255)
+    subject     = _sanitize(request.get("subject", ""), max_len=100)
+    curriculum  = _sanitize(request.get("curriculum", ""), max_len=100)
 
     if not upload_id:
         raise HTTPException(status_code=400, detail="upload_id required.")
@@ -1184,7 +1216,7 @@ async def get_my_questions(
         if difficulty: filters.append(f'difficulty = "{difficulty}"')
         if q_type:     filters.append(f'q_type = "{q_type}"')
         if search:
-            s = search.replace('"', '')
+            s = _sanitize(search, max_len=100)
             filters.append(f'(keywords ~ "{s}" || source_pdf ~ "{s}" || topic ~ "{s}" || subtopic ~ "{s}")')
 
         result = pb.collection("questions").get_list(page, per_page, {
@@ -1503,14 +1535,15 @@ async def download_questions(
 # ── Split quality rating ──────────────────────────────────────────────────────
 
 @app.patch("/api/uploads/{upload_id}/rating")
-async def rate_split(upload_id: str, request: dict):
+@limiter.limit("30/hour")
+async def rate_split(request: Request, upload_id: str, body: dict):
     """
     Record a thumbs up/down rating on a split.
     No auth required — anonymous users can rate too.
     Body: {"rating": "good"|"bad", "feedback": "optional string"}
     """
-    rating   = request.get("rating", "").strip()
-    feedback = request.get("feedback", "").strip()
+    rating   = body.get("rating", "").strip()
+    feedback = _sanitize(body.get("feedback", ""), max_len=500)
     if rating not in ("good", "bad"):
         raise HTTPException(status_code=400, detail="rating must be 'good' or 'bad'.")
     try:
