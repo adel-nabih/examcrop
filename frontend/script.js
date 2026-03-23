@@ -711,53 +711,86 @@ downloadAll.addEventListener('click', () => {
 
 function updateSaveBankBtn() {
     if (!saveBankBtn) return;
-    const loggedIn  = window.Auth && window.Auth.isLoggedIn();
     const hasResult = currentViewMode === 'results' && processedQuestions.length > 0 && window._lastUploadId;
-    saveBankBtn.style.display = (loggedIn && hasResult) ? '' : 'none';
+    if (!hasResult) {
+        saveBankBtn.style.display = 'none';
+        return;
+    }
+    saveBankBtn.style.display = '';
+    const loggedIn = window.Auth && window.Auth.isLoggedIn();
+    if (!loggedIn && !_bankSaved) {
+        saveBankBtn.textContent = '💾 Save to Bank';
+        saveBankBtn.classList.remove('saved');
+        saveBankBtn.disabled = false;
+    }
 }
+
+async function _doSaveToBank(retryCount = 0) {
+    const token    = window.Auth && window.Auth.getToken();
+    const uploadId = window._lastUploadId;
+    if (!token || !uploadId || _bankSaved) return;
+
+    saveBankBtn.disabled    = true;
+    saveBankBtn.textContent = retryCount > 0 ? 'Preparing…' : 'Saving...';
+
+    try {
+        const res = await fetch(`${API_BASE}/api/save-questions`, {
+            method:  'POST',
+            headers: {
+                'Content-Type':  'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ upload_id: uploadId }),
+        });
+
+        // R2 upload still in progress — retry up to 6 times (30s total)
+        if (res.status === 404 && retryCount < 6) {
+            saveBankBtn.textContent = 'Preparing files…';
+            setTimeout(() => _doSaveToBank(retryCount + 1), 5000);
+            return;
+        }
+
+        if (res.status === 409) {
+            _bankSaved = true;
+            saveBankBtn.textContent = '✓ Already in Bank';
+            saveBankBtn.classList.add('saved');
+            saveBankBtn.disabled = false;
+            return;
+        }
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.detail || 'Save failed');
+        }
+
+        _bankSaved = true;
+        saveBankBtn.textContent = '✓ Saved to Bank';
+        saveBankBtn.classList.add('saved');
+        saveBankBtn.disabled = false;
+
+    } catch (err) {
+        console.error('Save to Bank error:', err);
+        saveBankBtn.textContent = '💾 Save to Bank';
+        saveBankBtn.disabled    = false;
+    }
+}
+
+// Expose globally so auth.js can trigger save after login
+window._doSaveToBank = _doSaveToBank;
 
 if (saveBankBtn) {
     saveBankBtn.addEventListener('click', async () => {
-        const token    = window.Auth && window.Auth.getToken();
-        const uploadId = window._lastUploadId;
-        if (!token || !uploadId || _bankSaved) return;
-
-        saveBankBtn.disabled    = true;
-        saveBankBtn.textContent = 'Saving...';
-
-        try {
-            const res = await fetch(`${API_BASE}/api/save-questions`, {
-                method:  'POST',
-                headers: {
-                    'Content-Type':  'application/json',
-                    'Authorization': `Bearer ${token}`,
-                },
-                body: JSON.stringify({ upload_id: uploadId }),
-            });
-
-            if (res.status === 409) {
-                _bankSaved = true;
-                saveBankBtn.textContent = '✓ Already in Bank';
-                saveBankBtn.classList.add('saved');
-                saveBankBtn.disabled = false;
-                return;
+        const loggedIn = window.Auth && window.Auth.isLoggedIn();
+        if (!loggedIn) {
+            window._pendingSaveAfterAuth = true;
+            // Close viewer so modal appears on top, viewer reopens after save
+            if (typeof hideViewer === 'function') hideViewer();
+            if (typeof showAuthModal === 'function') {
+                showAuthModal('signup');
             }
-
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.detail || 'Save failed');
-            }
-
-            _bankSaved = true;
-            saveBankBtn.textContent = '✓ Saved to Bank';
-            saveBankBtn.classList.add('saved');
-            saveBankBtn.disabled = false;
-
-        } catch (err) {
-            console.error('Save to Bank error:', err);
-            saveBankBtn.textContent = '💾 Save to Bank';
-            saveBankBtn.disabled    = false;
+            return;
         }
+        await _doSaveToBank();
     });
 }
 

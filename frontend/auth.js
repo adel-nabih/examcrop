@@ -129,6 +129,18 @@ function _onAuthChange(user) {
     if (typeof window._bankAuthCallback === 'function') {
         window._bankAuthCallback(user);
     }
+
+    // ── Auto-save to bank if user just logged in with a pending upload ──
+    if (user && window._pendingSaveAfterAuth && typeof window._doSaveToBank === 'function') {
+        window._pendingSaveAfterAuth = false;
+        setTimeout(() => {
+            window._doSaveToBank();
+            // Reopen the viewer so they can see their questions
+            if (typeof showViewer === 'function' && typeof processedQuestions !== 'undefined' && processedQuestions.length > 0) {
+                showViewer('results');
+            }
+        }, 400);
+    }
 }
 
 function _updateDesktopNav(user) {
@@ -267,14 +279,18 @@ function _renderAuthModal(mode) {
 
     if (mode === 'login') {
         if (title)    title.textContent    = 'Welcome back';
-        if (subtitle) subtitle.textContent = 'Log in to your question bank';
+        if (subtitle) subtitle.textContent = window._pendingSaveAfterAuth
+            ? 'Log in to save your questions to your bank'
+            : 'Log in to your question bank';
         if (nameRow)  nameRow.style.display = 'none';
         if (submitBtn) submitBtn.textContent = 'Log In';
         if (switchLink) switchLink.innerHTML =
             `Don't have an account? <a href="#" id="authSwitchBtn">Sign up free</a>`;
     } else {
         if (title)    title.textContent    = 'Create your account';
-        if (subtitle) subtitle.textContent = 'Free during beta — no card needed';
+        if (subtitle) subtitle.textContent = window._pendingSaveAfterAuth
+            ? 'Free account — your questions will be saved automatically'
+            : 'Free during beta — no card needed';
         if (nameRow)  nameRow.style.display = '';
         if (submitBtn) submitBtn.textContent = 'Create Account';
         if (switchLink) switchLink.innerHTML =
