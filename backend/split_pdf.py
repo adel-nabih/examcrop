@@ -98,7 +98,7 @@ class YOLOQuestionSplitter:
             }
         
         page_data = []
-        with ThreadPoolExecutor(max_workers=4) as executor:
+        with ThreadPoolExecutor(max_workers=2) as executor:
             futures = [executor.submit(process_page, i) for i in range(page_count)]
             for future in as_completed(futures):
                 page_data.append(future.result())

@@ -1053,18 +1053,33 @@ splitBtn.addEventListener('click', async () => {
         const isReturning = !!savedEmail;
         const sourcePage  = window.EXAMCROP_SOURCE_PAGE || 'home';
         const returningParam = isReturning ? `&returning_email=${encodeURIComponent(savedEmail)}` : '';
-        const url = `${API_BASE}/api/split?dpi=200&conf_threshold=0.10${isDemo ? '&is_sample=true' : ''}${pageRangeParam}&is_returning=${isReturning}${returningParam}&source_page=${sourcePage}`;
+        const url = `${API_BASE}/api/split?dpi=150&conf_threshold=0.10${isDemo ? '&is_sample=true' : ''}${pageRangeParam}&is_returning=${isReturning}${returningParam}&source_page=${sourcePage}`;
 
         console.log('Uploading to:', url);
         console.log('File:', selectedFile.name, selectedFile.size);
 
-        updateProgress(10, 'Uploading... 10%');
-        
+        updateProgress(15, 'Uploading...');
+
         const controller = new AbortController();
         const timeoutId  = setTimeout(() => controller.abort(), 180000);
 
-        updateProgress(30, 'Uploading... 30%');
-        
+        updateProgress(30, 'Uploading...');
+
+        // Smooth progress animation while server processes — crawls 30→88% over ~12s
+        let _animPct = 30;
+        const _animInterval = setInterval(() => {
+            const remaining = 88 - _animPct;
+            _animPct += remaining * 0.06; // decelerates as it approaches 88
+            const labels = [
+                [40, 'Analysing pages...'],
+                [55, 'Detecting questions...'],
+                [70, 'Splitting...'],
+                [82, 'Almost done...'],
+            ];
+            const label = [...labels].reverse().find(([pct]) => _animPct >= pct)?.[1] || 'Processing...';
+            updateProgress(Math.min(_animPct, 88), label);
+        }, 200);
+
         const response = await fetch(url, {
             method: 'POST',
             body: formData,
@@ -1072,8 +1087,9 @@ splitBtn.addEventListener('click', async () => {
             cache: 'no-store'
         });
 
+        clearInterval(_animInterval);
         clearTimeout(timeoutId);
-        updateProgress(50, 'Processing... 50%');
+        updateProgress(92, 'Finalizing...');
 
         console.log('Response status:', response.status);
 
@@ -1094,7 +1110,7 @@ splitBtn.addEventListener('click', async () => {
             throw new Error(errText);
         }
 
-        updateProgress(70, 'Splitting questions... 70%');
+        updateProgress(95, 'Preparing preview...');
 
         const questionCount      = response.headers.get('X-Questions-Count');
         const uploadId           = response.headers.get('X-Upload-Id');
@@ -1110,8 +1126,7 @@ splitBtn.addEventListener('click', async () => {
         }
 
         console.log('Downloading:', filename, 'Questions:', questionCount);
-        updateProgress(90, 'Finalizing... 90%');
-
+        updateProgress(100, 'Complete!');
         let blob;
         try {
             blob = await response.blob();
@@ -1124,8 +1139,6 @@ splitBtn.addEventListener('click', async () => {
         if (blob.size === 0) {
             throw new Error('Received empty file. Please try again.');
         }
-
-        updateProgress(100, 'Complete! 100%');
 
         pendingDownload = {
             blob:          blob,
@@ -1153,6 +1166,7 @@ splitBtn.addEventListener('click', async () => {
         }, 500);
 
     } catch (error) {
+        clearInterval(typeof _animInterval !== 'undefined' ? _animInterval : null);
         console.error('Error:', error);
         progressContainer.classList.remove('show');
         showError(error.message);
