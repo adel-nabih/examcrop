@@ -234,7 +234,7 @@ async def split_worksheet(
     file: UploadFile = File(...),
     dpi: int = 250,
     debug: bool = False,
-    conf_threshold: float = 0.10,
+    conf_threshold: float = 0.05,
     is_sample: bool = False,
     pages: str = None,
     is_returning: bool = False,
