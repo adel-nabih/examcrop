@@ -98,7 +98,7 @@ class YOLOQuestionSplitter:
             }
         
         page_data = []
-        with ThreadPoolExecutor(max_workers=2) as executor:
+        with ThreadPoolExecutor(max_workers=1) as executor:
             futures = [executor.submit(process_page, i) for i in range(page_count)]
             for future in as_completed(futures):
                 page_data.append(future.result())
@@ -108,7 +108,7 @@ class YOLOQuestionSplitter:
         page_data.sort(key=lambda x: x['page_num'])
         return page_data
     
-    def detect_questions_batch(self, images: List[np.ndarray], conf_threshold: float = 0.1) -> List[List[Dict]]:
+    def detect_questions_batch(self, images: List[np.ndarray], conf_threshold: float = 0.05) -> List[List[Dict]]:
         """Batch YOLO inference for multiple images - MAJOR SPEEDUP"""
         results = self.model(images, conf=conf_threshold, imgsz=1024, verbose=False)
         
@@ -132,6 +132,7 @@ class YOLOQuestionSplitter:
                         'h': int(y2 - y1),
                         'confidence': float(conf)
                     })
+                    print(f"conf: {conf:.3f}  xyxy: {box.tolist()}")
             all_blocks.append(blocks)
         
         return all_blocks

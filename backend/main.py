@@ -167,8 +167,8 @@ async def lifespan(app: FastAPI):
     else:
         print("⚠️ R2 disabled (SAVE_TO_R2=false)")
 
-    thread_pool = ThreadPoolExecutor(max_workers=4)
-    process_pool = ProcessPoolExecutor(max_workers=2)
+    thread_pool = ThreadPoolExecutor(max_workers=2)
+    process_pool = ProcessPoolExecutor(max_workers=1)
     print("✅ Thread and process pools initialised")
 
     print("="*70)
@@ -392,6 +392,9 @@ async def split_worksheet(
                 cleanup_temp=True,
                 conf_threshold=conf_threshold
             )
+
+            import gc
+            gc.collect() 
 
             processing_time = time.time() - start_time
             print(f"⏱️ Processing completed in {processing_time:.2f} seconds")

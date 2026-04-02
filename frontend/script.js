@@ -3,7 +3,7 @@ const API_BASE = (() => {
     const hostname = window.location.hostname;
     
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        return 'http://localhost:8000';
+        return 'http://localhost:8080';
     }
     
     if (hostname === 'examcrop.com' || hostname === 'www.examcrop.com') {
