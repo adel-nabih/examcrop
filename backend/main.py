@@ -135,9 +135,9 @@ async def lifespan(app: FastAPI):
     print("="*70)
 
     try:
-        if os.path.exists("best.pt"):
+        if os.path.exists("best_v4.pt"):
             print("📦 Loading YOLO model...")
-            yolo_splitter = YOLOQuestionSplitter(debug=False, model_path="best.pt")
+            yolo_splitter = YOLOQuestionSplitter(debug=False, model_path="best_v4.pt")
             print("✅ YOLO model loaded")
         else:
             print("❌ best.pt not found - service will not work")
@@ -196,7 +196,9 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 origins = [
     "http://localhost:8000",
+    "http://localhost:8080",
     "http://127.0.0.1:8000",
+    "http://127.0.0.1:8080",
     "http://localhost",
     "http://127.0.0.1",
     "https://examcrop.com",
@@ -216,7 +218,7 @@ app.add_middleware(
 
 @app.get("/api")
 def read_root():
-    model_status = "trained" if os.path.exists("best.pt") else "not_trained"
+    model_status = "trained" if os.path.exists("best_v4.pt") else "not_trained"
     return {
         "status": "ok",
         "service": "yolov26-question-splitter",
@@ -263,7 +265,7 @@ async def split_worksheet(
         )
 
     MAX_SIZE  = 20 * 1024 * 1024
-    MAX_PAGES = 20
+    MAX_PAGES = 120
 
     contents      = await file.read()
     file_size_mb  = len(contents) / (1024 * 1024)
@@ -646,7 +648,7 @@ async def split_worksheet(
 
 @app.get("/api/health")
 def health_check():
-    model_exists = os.path.exists("best.pt")
+    model_exists = os.path.exists("best_v4.pt")
     return {
         "status":      "healthy" if model_exists else "model_missing",
         "method":      "YOLOv26 Custom Trained - Optimized",

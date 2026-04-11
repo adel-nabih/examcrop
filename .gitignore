@@ -52,3 +52,7 @@ output/
 
 training_run1/
 requirements-local.txt
+
+yolo26s.pt
+
+localtraining/

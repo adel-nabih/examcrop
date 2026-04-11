@@ -203,8 +203,10 @@ class YOLOQuestionSplitter:
         """Crop questions directly from PDF without intermediate conversions - MAJOR SPEEDUP.
         Returns list of {q_num, page_num, rect} for thumbnail generation."""
         page = pdf_doc[page_num]
-        
-        if page.rotation != 0:
+        rotation = page.rotation
+
+        if rotation != 0:
+        # Apply rotation to the transformation matrix instead of stripping metadata
             page.set_rotation(0)
         
         scale = 72 / dpi
@@ -310,6 +312,17 @@ class YOLOQuestionSplitter:
             all_crop_info: List[Dict] = []
             
             pdf_doc = fitz.open(pdf_path)
+
+            # Normalize all page rotations
+            for i in range(len(pdf_doc)):
+                page = pdf_doc[i]
+                if page.rotation != 0:
+                    page.set_rotation(0)
+
+            normalized_path = pdf_path + "_normalized.pdf"
+            pdf_doc.save(normalized_path)
+            pdf_doc.close()
+            pdf_doc = fitz.open(normalized_path)
             
             for page_num, (page_data, blocks) in enumerate(zip(page_data_list, all_blocks)):
                 if not blocks:
@@ -341,6 +354,8 @@ class YOLOQuestionSplitter:
         finally:
             if temp_pdf and cleanup_temp and os.path.exists(temp_pdf):
                 os.unlink(temp_pdf)
+            if os.path.exists(normalized_path):
+                os.unlink(normalized_path)
 
 
 def main():
@@ -352,7 +367,7 @@ def main():
     output_dir = sys.argv[2]
     
     model_path = 'best.pt'
-    conf_threshold = 0.1
+    conf_threshold = 0.15
     dpi = 200
     debug = '--debug' in sys.argv
     
